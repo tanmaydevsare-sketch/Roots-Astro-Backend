@@ -1,0 +1,287 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 Int                @id @default(autoincrement())
+  email              String             @unique
+  password           String
+  role               String             @default("CLIENT")
+  status             String             @default("active")
+  firstName          String
+  lastName           String
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  phone              String?            @unique
+  city               String?
+  country            String?
+  dob                String?
+  gender             String?
+  astrologerProfile  AstrologerProfile?
+  clientProfile      ClientProfile?
+  wallet             Wallet?
+  withdrawals        Withdrawal[]
+  auditLogs          AuditLog[]
+  bookings           Booking[]          @relation("ClientBookings")
+  astrologerBookings Booking[]          @relation("AstrologerBookings")
+}
+
+model AstrologerProfile {
+  id            Int      @id @default(autoincrement())
+  userId        Int      @unique
+  user          User     @relation(fields: [userId], references: [id])
+  bio           String?
+  expertise     String?
+  languages     String?
+  experience    String?
+  experienceInt Int?     @default(0)
+  rate          String?  @default("50")
+  rating        Float    @default(5.0)
+  isOnline      Boolean  @default(false)
+  image         String?
+  
+  // Mandatory Vetting Fields
+  idNumber      String?
+  upiId         String?
+  certification String?
+
+  // Payment Gateway Connection Status
+  razorpayId        String?
+  razorpayConnected Boolean  @default(false)
+  paypalEmail      String?
+  paypalConnected   Boolean  @default(false)
+
+  status        String   @default("PENDING_APPROVAL") // PENDING_APPROVAL, APPROVED, REJECTED
+  services      Service[]
+  bookings      Booking[]
+  availability  Availability[]
+  reviews       Review[]
+}
+
+model ClientProfile {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @unique
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Service {
+  id              Int               @id @default(autoincrement())
+  profileId       Int
+  profile         AstrologerProfile @relation(fields: [profileId], references: [id])
+  masterServiceId Int?
+  masterService   MasterService?    @relation(fields: [masterServiceId], references: [id])
+  title           String
+  description     String
+  price           Float
+  duration        Int
+  type            String            @default("CHAT")
+  active          Boolean           @default(true)
+  bookings        Booking[]
+}
+
+model Booking {
+  id              Int               @id @default(autoincrement())
+  clientId        Int
+  client          User              @relation("ClientBookings", fields: [clientId], references: [id])
+  astrologerId    Int
+  astrologer      User              @relation("AstrologerBookings", fields: [astrologerId], references: [id])
+  profileId       Int?
+  profile         AstrologerProfile? @relation(fields: [profileId], references: [id])
+  serviceId       Int?
+  service         Service?          @relation(fields: [serviceId], references: [id])
+  scheduledAt     DateTime
+  startTime       DateTime?         // Actual start time
+  endTime         DateTime?         // Actual end time
+  status          String            @default("BOOKED") // UPCOMING, IN_PROGRESS, COMPLETED, CANCELLED
+  type            String            @default("CHAT")   // CHAT, VIDEO
+  amount          Float
+  zoomMeetingUrl  String?
+  recordingUrl    String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+}
+
+model Wallet {
+  id           Int           @id @default(autoincrement())
+  userId       Int           @unique
+  user         User          @relation(fields: [userId], references: [id])
+  balance      Float         @default(0.0)
+  transactions Transaction[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model Transaction {
+  id           Int         @id @default(autoincrement())
+  walletId     Int
+  wallet       Wallet      @relation(fields: [walletId], references: [id])
+  amount       Float
+  type         String      // CREDIT, DEBIT
+  category     String?     // BOOKING, TOPUP, WITHDRAWAL, REFUND
+  status       String      @default("COMPLETED") // PENDING, COMPLETED, FAILED
+  description  String?
+  reference    String?     @unique
+  withdrawalId Int?
+  withdrawal   Withdrawal? @relation(fields: [withdrawalId], references: [id])
+  createdAt    DateTime    @default(now())
+}
+
+model Withdrawal {
+  id              Int           @id @default(autoincrement())
+  userId          Int
+  user            User          @relation(fields: [userId], references: [id])
+  amount          Float
+  method          String
+  details         String?
+  status          String        @default("PENDING") // PENDING, APPROVED, REJECTED, COMPLETED
+  reference       String        @unique
+  adminNotes      String?
+  rejectionReason String?
+  transactions    Transaction[]
+  processedAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  action    String
+  details   String?
+  userId    Int?
+  user      User?    @relation(fields: [userId], references: [id])
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+}
+
+model GlobalSettings {
+  id                Int      @id @default(1)
+  platformName      String   @default("Roots Astro")
+  supportEmail      String?
+  contactPhone      String?
+  systemCurrency    String   @default("USD")
+  maintenanceMode   Boolean  @default(false)
+  allowNewRegistrations Boolean @default(true)
+  commissionRate    Float    @default(0.20)
+  
+  // Platform Support
+  apiLockdown       Boolean  @default(false)
+
+  // Razorpay and PayPal modes
+  razorpayMode      String?  @default("test")
+  paypalMode        String?  @default("sandbox")
+
+  // Payment Method Control
+  allowUpi          Boolean  @default(true)
+  allowCard         Boolean  @default(true)
+  allowNetBanking   Boolean  @default(true)
+
+  // Recording Governance
+  recordSessions    Boolean  @default(true)
+  overallRecordingGovernance Boolean @default(true)
+  recordingRetentionDays Int @default(30)
+  autoShareRecordings Boolean @default(false)
+  maxRecordingSizeMB  Int @default(500)
+
+  // Cloud Storage Options (AWS, Wasabi, etc.)
+  activeStorage        String   @default("local") // local, aws, wasabi
+  storageBucket        String?
+  storageRegion        String?
+  storageEndpoint      String?
+  storageAccessKey     String?
+  storageSecretKey     String?
+
+  // Admin Bank Details
+  adminBankName     String?
+  adminAccountNo    String?
+  adminIfsc         String?
+
+  // Payment Gateway Keys
+  activeGateway     String   @default("razorpay")
+  razorpayKeyId     String?
+  razorpayKeySecret String?
+  paypalClientId    String?
+  paypalClientSecret String?
+
+  // Video Provider
+  activeVideoProvider String @default("zoom")
+  zoomAccountId     String?
+  zoomClientId       String?
+  zoomClientSecret   String?
+  
+  // Dynamic CMS Content
+  heroTitle         String?  @default("Your Destiny, Revealed through Stars")
+  heroSubtitle      String?  @default("Connect with elite astrologers for personalized readings.")
+  feature1Title     String?  @default("Expert Astrologers")
+  feature1Desc      String?  @default("Connect with verified professionals.")
+  feature2Title     String?  @default("Secure Sessions")
+  feature2Desc      String?  @default("Encrypted video calls.")
+  feature3Title     String?  @default("24/7 Availability")
+  feature3Desc      String?  @default("Global network ensurance.")
+
+  // Strategic Pages (Markdown supported)
+  aboutUsContent    String?  @default("# About Us\nWelcome to Roots Astro...")
+  contactContent    String?  @default("# Contact Us\nEmail: support@rootsastro.com")
+  privacyPolicy     String?  @default("# Privacy Policy\nYour data is safe with us.")
+  termsOfService    String?  @default("# Terms of Service\nBy using our site...")
+  refundPolicy      String?  @default("# Refund Policy\nWe offer refunds in certain cases.")
+  blogContent        String?  @default("# Latest from Roots Astro\nStay updated with celestial events.")
+  legalContent       String?  @default("# Legal Notices\nGeneral platform governance and regulations.")
+
+  // Live Branding
+  sitePrimaryColor    String @default("#2D1E4D")
+  siteSecondaryColor  String @default("#D4AF37")
+  siteAccentColor     String @default("#8B5FBF")
+  siteLogo            String? 
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model MasterService {
+  id          Int              @id @default(autoincrement())
+  name        String
+  description String?
+  categoryId  Int
+  category    ServiceCategory @relation(fields: [categoryId], references: [id])
+  active      Boolean          @default(true)
+  services    Service[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model ServiceCategory {
+  id             Int             @id @default(autoincrement())
+  name           String          @unique
+  description    String?
+  active         Boolean         @default(true)
+  masterServices MasterService[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+model Review {
+  id              Int               @id @default(autoincrement())
+  rating          Int
+  comment         String?
+  clientId        Int
+  profileId       Int
+  profile         AstrologerProfile @relation(fields: [profileId], references: [id])
+  createdAt       DateTime          @default(now())
+}
+
+model Availability {
+  id           Int               @id @default(autoincrement())
+  profileId    Int
+  profile      AstrologerProfile @relation(fields: [profileId], references: [id])
+  dayOfWeek    Int               // 0-6
+  startTime    String
+  endTime      String
+}
