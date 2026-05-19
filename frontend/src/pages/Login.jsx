@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Star, User, Shield, Edit3, Smartphone, Key, ArrowRight, CheckCircle, Lock } from 'lucide-react';
+import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
+import { auth } from '../firebase';
 import API_URL from '../api/config';
 
 const PORTALS = {
@@ -36,30 +38,41 @@ const Login = ({ onLogin, portal = 'CLIENT' }) => {
             if (phone.length < 10) return setError('Enter a valid mobile number.');
             setLoading(true);
             try {
-                const res = await fetch(`${API_URL}/api/auth/otp/send`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ phone })
-                });
-                if (res.ok) setStep('otp');
-                else setError('Failed to send OTP.');
-            } catch (err) { setError('Network error.'); }
+                if (!window.recaptchaVerifier) {
+                    window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+                        size: 'invisible'
+                    });
+                }
+                const formattedPhone = `+91${phone}`; // Assuming India for now
+                const confirmationResult = await signInWithPhoneNumber(auth, formattedPhone, window.recaptchaVerifier);
+                window.confirmationResult = confirmationResult;
+                setStep('otp');
+            } catch (err) { 
+                console.error(err);
+                setError('Failed to send OTP via Firebase.'); 
+            }
             setLoading(false);
         } else {
             setLoading(true);
             try {
-                const res = await fetch(`${API_URL}/api/auth/otp/verify`, {
+                const result = await window.confirmationResult.confirm(otp);
+                const idToken = await result.user.getIdToken();
+
+                const res = await fetch(`${API_URL}/api/auth/firebase-login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ phone, otp })
+                    body: JSON.stringify({ idToken, role: 'CLIENT' })
                 });
                 const data = await res.json();
                 if (res.ok) {
                     localStorage.setItem('token', data.token);
                     onLogin(data.user);
                     navigate('/client');
-                } else setError(data.error || 'Verification failed.');
-            } catch (err) { setError('Network error.'); }
+                } else setError(data.error || 'Verification failed on backend.');
+            } catch (err) { 
+                console.error(err);
+                setError('Invalid OTP or network error.'); 
+            }
             setLoading(false);
         }
     };
@@ -185,8 +198,8 @@ const Login = ({ onLogin, portal = 'CLIENT' }) => {
                                 <>
                                     <div className="form-group fade-in">
                                         <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Key size={14} /> Secure OTP Code</label>
-                                        <input className="form-input" style={{ letterSpacing: '0.5rem', textAlign: 'center', fontSize: '1.5rem' }} type="text" placeholder="●●●●" maxLength={4} value={otp} onChange={e => setOtp(e.target.value)} required autoFocus />
-                                        <p style={{ marginTop: '0.75rem', fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center' }}>Enter <strong>1234</strong> to verify device.</p>
+                                        <input className="form-input" style={{ letterSpacing: '0.5rem', textAlign: 'center', fontSize: '1.5rem' }} type="text" placeholder="●●●●●●" maxLength={6} value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))} required autoFocus />
+                                        <p style={{ marginTop: '0.75rem', fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center' }}>Enter the 6-digit code sent to your phone.</p>
                                     </div>
                                     <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
                                         <button type="submit" className="btn btn-primary" style={{ flex: 2, background: 'var(--gold-gradient)' }}>Verify & Sign In</button>
@@ -215,6 +228,8 @@ const Login = ({ onLogin, portal = 'CLIENT' }) => {
                     )}
 
                     {error && <p className="form-error" style={{ textAlign: 'center', marginTop: '1rem' }}>{error}</p>}
+                    <div id="recaptcha-container"></div>
+                    
                     
                     <div className="login-footer-links" style={{ marginTop: '2rem', textAlign: 'center', borderTop: '1px solid var(--glass-border)', paddingTop: '1.5rem' }}>
                         {portal !== 'CLIENT' && <Link to="/login" style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>← Return to Primary Login</Link>}

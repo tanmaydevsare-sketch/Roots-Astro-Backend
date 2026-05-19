@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Star, Shield, Image, Video, CheckCircle, ArrowRight, ArrowLeft, Briefcase, DollarSign, Award, CreditCard } from 'lucide-react';
+import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
+import { auth } from '../firebase';
 import API_URL from '../api/config';
 
 const AstrologerApplication = ({ onLogin }) => {
@@ -29,14 +31,19 @@ const AstrologerApplication = ({ onLogin }) => {
         if (e) e.preventDefault();
         setLoading(true);
         try {
-            const res = await fetch(`${API_URL}/api/auth/otp/send`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phone })
-            });
-            if (res.ok) setStep(2);
-            else alert('Failed to send OTP to ' + phone);
-        } catch (err) { alert('Network error. Check backend server.'); }
+            if (!window.recaptchaVerifier) {
+                window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+                    size: 'invisible'
+                });
+            }
+            const formattedPhone = `+91${phone}`; // Assuming India for now
+            const confirmationResult = await signInWithPhoneNumber(auth, formattedPhone, window.recaptchaVerifier);
+            window.confirmationResult = confirmationResult;
+            setStep(2);
+        } catch (err) { 
+            console.error(err);
+            alert('Failed to send OTP via Firebase.'); 
+        }
         setLoading(false);
     };
 
@@ -44,18 +51,24 @@ const AstrologerApplication = ({ onLogin }) => {
         if (e) e.preventDefault();
         setLoading(true);
         try {
-            const res = await fetch(`${API_URL}/api/auth/otp/verify`, {
+            const result = await window.confirmationResult.confirm(otp);
+            const idToken = await result.user.getIdToken();
+
+            const res = await fetch(`${API_URL}/api/auth/firebase-login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phone, otp, role: 'ASTROLOGER' }) // Using standard role architecture
+                body: JSON.stringify({ idToken, role: 'ASTROLOGER' }) // Using standard role architecture
             });
             const data = await res.json();
             if (res.ok) {
                 localStorage.setItem('token', data.token);
                 onLogin && onLogin(data.user);
                 setStep(3); // MANDATORY: Move to mandatory professional details
-            } else alert('Invalid Code. Use 1234');
-        } catch (err) { alert('Verification failed.'); }
+            } else alert(data.error || 'Verification failed on backend.');
+        } catch (err) { 
+            console.error(err);
+            alert('Invalid Code or network error.'); 
+        }
         setLoading(false);
     };
 
@@ -217,6 +230,8 @@ const AstrologerApplication = ({ onLogin }) => {
                             <button onClick={() => navigate('/astrologer')} className="btn btn-primary btn-block btn-lg" style={{ fontWeight: 700 }}>Enter Partner View</button>
                         </div>
                     )}
+                    
+                    <div id="recaptcha-container"></div>
                 </div>
             </div>
         </div>

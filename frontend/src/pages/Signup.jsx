@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Star, Phone, ArrowRight, Shield, CheckCircle, Calendar, Users, Briefcase } from 'lucide-react';
+import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
+import { auth } from '../firebase';
 import API_URL from '../api/config';
 
 const Signup = ({ onLogin }) => {
@@ -30,14 +32,19 @@ const Signup = ({ onLogin }) => {
         if (phone.length < 10) return setError('Enter a valid mobile number.');
         setLoading(true);
         try {
-            const res = await fetch(`${API_URL}/api/auth/otp/send`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phone: `${countryCode}${phone}` })
-            });
-            if (res.ok) setStep('otp');
-            else setError('Failed to send OTP.');
-        } catch (err) { setError('Network error. Is the server running?'); }
+            if (!window.recaptchaVerifier) {
+                window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+                    size: 'invisible'
+                });
+            }
+            const formattedPhone = `${countryCode}${phone}`;
+            const confirmationResult = await signInWithPhoneNumber(auth, formattedPhone, window.recaptchaVerifier);
+            window.confirmationResult = confirmationResult;
+            setStep('otp');
+        } catch (err) { 
+            console.error(err);
+            setError('Failed to send OTP via Firebase.'); 
+        }
         setLoading(false);
     };
 
@@ -46,10 +53,13 @@ const Signup = ({ onLogin }) => {
         setError('');
         setLoading(true);
         try {
-            const res = await fetch(`${API_URL}/api/auth/otp/verify`, {
+            const result = await window.confirmationResult.confirm(otp);
+            const idToken = await result.user.getIdToken();
+
+            const res = await fetch(`${API_URL}/api/auth/firebase-login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phone: `${countryCode}${phone}`, otp, role })
+                body: JSON.stringify({ idToken, role })
             });
             const data = await res.json();
             if (res.ok) {
@@ -64,9 +74,12 @@ const Signup = ({ onLogin }) => {
                     navigate('/client');
                 }
             } else {
-                setError(data.error || 'Invalid OTP. Use 1234');
+                setError(data.error || 'Verification failed on backend.');
             }
-        } catch (err) { setError('Network error during verification.'); }
+        } catch (err) { 
+            console.error(err);
+            setError('Invalid OTP or network error.'); 
+        }
         setLoading(false);
     };
 
@@ -163,7 +176,7 @@ const Signup = ({ onLogin }) => {
                                 type="text" 
                                 value={otp} 
                                 onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0,6))} 
-                                placeholder="• • • •" 
+                                placeholder="• • • • • •" 
                                 style={{ width: '100%', textAlign: 'center', fontSize: '2.5rem', letterSpacing: '8px', background: 'transparent', border: 'none', borderBottom: '2px solid var(--secondary-color)', color: 'var(--secondary-color)', fontWeight: 800, padding: '0.5rem' }}
                                 autoFocus
                             />
@@ -193,6 +206,7 @@ const Signup = ({ onLogin }) => {
                 <div style={{ textAlign: 'center', marginTop: '2rem', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '2.5rem' }}>
                     <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Already have an account? <Link to="/login" style={{ color: 'var(--secondary-color)', fontWeight: 700 }}>Log In</Link></p>
                 </div>
+                <div id="recaptcha-container"></div>
 
             </div>
         </div>

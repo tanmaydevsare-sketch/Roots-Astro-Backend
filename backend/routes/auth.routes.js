@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const prisma = require('../config/prisma');
 const { authMiddleware, roleMiddleware } = require('../middleware/auth');
+const firebaseAdmin = require('../config/firebase');
 
 /**
  * @swagger
@@ -125,6 +126,78 @@ router.post('/otp/verify', async (req, res) => {
     res.json({ token, user: { id: user.id, phone: user.phone, role: user.role, status: user.status, firstName: user.firstName, lastName: user.lastName } });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /api/auth/firebase-login:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Verify Firebase ID token and sign in/register user
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [idToken]
+ *             properties:
+ *               idToken: { type: string }
+ *               role: { type: string, description: "Role to assign if registering" }
+ */
+router.post('/firebase-login', async (req, res) => {
+  const { idToken, role } = req.body;
+  if (!idToken) return res.status(400).json({ error: 'Firebase ID token is required' });
+
+  try {
+    // 1. Verify the Firebase token
+    const decodedToken = await firebaseAdmin.auth().verifyIdToken(idToken);
+    const phone = decodedToken.phone_number;
+
+    if (!phone) {
+      return res.status(400).json({ error: 'No phone number found in Firebase token' });
+    }
+
+    // 2. Find or create user
+    let user = await prisma.user.findUnique({ where: { phone } });
+    
+    if (!user) {
+      const assignedRole = role || 'CLIENT';
+      // Auto-register new users
+      user = await prisma.user.create({
+        data: {
+          phone,
+          email: `${phone.replace('+', '')}@rootsastro.com`, // Temporary email
+          password: await bcrypt.hash(Math.random().toString(), 10),
+          firstName: 'New',
+          lastName: 'User',
+          role: assignedRole,
+          status: assignedRole === 'ASTROLOGER' ? 'PENDING' : 'active'
+        }
+      });
+      
+      if (assignedRole === 'ASTROLOGER') {
+          await prisma.astrologerProfile.create({ data: { userId: user.id } });
+      } else {
+          await prisma.clientProfile.create({ data: { userId: user.id } });
+      }
+
+      // Create Wallet for every new user
+      await prisma.wallet.create({ data: { userId: user.id, balance: 0 } });
+    }
+
+    // 3. Issue our own JWT
+    const token = jwt.sign(
+      { id: user.id, phone: user.phone, role: user.role },
+      process.env.JWT_SECRET || "supersecretjwtkey_astro_4b9a1c",
+      { expiresIn: '30d' }
+    );
+
+    res.json({ token, user: { id: user.id, phone: user.phone, role: user.role, status: user.status, firstName: user.firstName, lastName: user.lastName } });
+  } catch (error) {
+    console.error('[AUTH] Firebase verification error:', error);
+    res.status(401).json({ error: 'Invalid or expired Firebase token' });
   }
 });
 
