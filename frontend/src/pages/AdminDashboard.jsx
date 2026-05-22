@@ -299,19 +299,22 @@ const AdminDashboard = ({ user }) => {
             });
             if (res.ok) {
                 const data = await res.json();
-                setAllAstros(data.map(p => ({
-                    ...p,
-                    name: `${p.user?.firstName || ''} ${p.user?.lastName || ''}`.trim() || 'Expert',
-                    email: p.user?.email,
-                    rating: p.rating || 5.0,
-                    reviews: 0,
-                    languages: p.languages || 'English, Hindi',
-                    expertise: p.expertise ? p.expertise.split(',').map(e => e.trim()) : [],
-                    rate: p.rate || "50",
-                    sessions: p.sessions?.length || 0,
-                    available: p.isOnline,
-                    astrologerProfile: { image: p.image }
-                })));
+                setAllAstros(data.map(p => {
+                    const profile = p.astrologerProfile || {};
+                    return {
+                        ...p,
+                        name: `${p.firstName || ''} ${p.lastName || ''}`.trim() || 'Expert',
+                        email: p.email,
+                        rating: profile.rating || 5.0,
+                        reviews: 0,
+                        languages: profile.languages || 'English, Hindi',
+                        expertise: profile.expertise ? profile.expertise.split(',').map(e => e.trim()) : [],
+                        rate: profile.rate || "50",
+                        sessions: p.astrologerBookings?.length || 0,
+                        available: profile.isOnline,
+                        astrologerProfile: { image: profile.image }
+                    };
+                }));
             }
         } catch (err) { console.error("Fetch astrologers failed", err); }
     };
@@ -330,7 +333,7 @@ const AdminDashboard = ({ user }) => {
                     name: `${p.user?.firstName || 'New'} ${p.user?.lastName || 'Applicant'}`,
                     email: p.user?.email,
                     expertise: p.expertise,
-                    applied: new Date(p.createdAt).toLocaleDateString(),
+                    applied: p.user?.createdAt ? new Date(p.user.createdAt).toLocaleDateString() : 'N/A',
                     bio: p.bio,
                     experience: p.experienceInt ? `${p.experienceInt} years` : 'N/A'
                 })));

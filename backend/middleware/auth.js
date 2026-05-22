@@ -51,7 +51,17 @@ const authMiddleware = async (req, res, next) => {
 
 const roleMiddleware = (allowedRoles) => {
   return (req, res, next) => {
-    if (!req.user || !allowedRoles.includes(req.user.role)) {
+    if (!req.user) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    
+    // Normalize role and check access: allow if user role is explicitly allowed, or user is SUPERADMIN and ADMIN is allowed
+    const userRole = req.user.role;
+    const isAllowed = allowedRoles.includes(userRole) || 
+                      (userRole === 'SUPERADMIN' && allowedRoles.includes('ADMIN'));
+
+    if (!isAllowed) {
+      console.warn(`[AUTH] Access denied for user ${req.user.id} (${userRole}) to allowed roles: ${allowedRoles.join(', ')}`);
       return res.status(403).json({ error: 'Forbidden' });
     }
     next();
