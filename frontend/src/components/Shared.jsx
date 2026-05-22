@@ -104,11 +104,18 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, activeGateway 
 
     const commissionRate = PLATFORM_CONFIG.commissionRate;
 
-    const services = astro ? [
-        { name: 'Natal Chart Analysis', duration: '45 min', price: astro.rate },
-        { name: 'Relationship Compatibility', duration: '60 min', price: astro.rate + 25 },
-        { name: 'Career & Finance Forecast', duration: '30 min', price: Math.max(30, astro.rate - 10) },
-    ] : [];
+    const services = astro?.astrologerProfile?.services?.length > 0
+        ? astro.astrologerProfile.services.map(s => ({
+            id: s.id,
+            name: s.title,
+            duration: `${s.duration} min`,
+            price: s.price
+          }))
+        : astro ? [
+            { id: 1, name: 'Natal Chart Analysis', duration: '45 min', price: astro.rate },
+            { id: 2, name: 'Relationship Compatibility', duration: '60 min', price: astro.rate + 25 },
+            { id: 3, name: 'Career & Finance Forecast', duration: '30 min', price: Math.max(30, astro.rate - 10) },
+          ] : [];
     const dates = ['Mar 5, 2026', 'Mar 6, 2026', 'Mar 7, 2026', 'Mar 8, 2026', 'Mar 10, 2026'];
     const currentService = services.find(s => s.name === selectedService);
     const price = currentService?.price || 0;

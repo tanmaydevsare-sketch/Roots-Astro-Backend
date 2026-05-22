@@ -13,6 +13,8 @@ const AstrologerApplication = ({ onLogin }) => {
     // Auth State
     const [phone, setPhone] = useState('');
     const [otp, setOtp] = useState('');
+    const [error, setError] = useState('');
+    const [showFirebaseDomainNotice, setShowFirebaseDomainNotice] = useState(false);
     
     // Detailed Application State
     const [formData, setFormData] = useState({
@@ -27,22 +29,50 @@ const AstrologerApplication = ({ onLogin }) => {
         certification: ''
     });
 
+    React.useEffect(() => {
+        return () => {
+            if (window.recaptchaVerifier) {
+                try {
+                    window.recaptchaVerifier.clear();
+                } catch (e) {
+                    console.error(e);
+                }
+                window.recaptchaVerifier = null;
+            }
+        };
+    }, []);
+
+
     const handleSendOtp = async (e) => {
         if (e) e.preventDefault();
         setLoading(true);
+        setError('');
+        setShowFirebaseDomainNotice(false);
         try {
-            if (!window.recaptchaVerifier) {
-                window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-                    size: 'invisible'
-                });
+            if (window.recaptchaVerifier) {
+                try {
+                    window.recaptchaVerifier.clear();
+                } catch (err) {}
+                window.recaptchaVerifier = null;
             }
-            const formattedPhone = `+91${phone}`; // Assuming India for now
+            window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+                size: 'invisible'
+            });
+            let formattedPhone = phone.trim();
+            if (!formattedPhone.startsWith('+')) {
+                formattedPhone = `+91${formattedPhone}`;
+            }
             const confirmationResult = await signInWithPhoneNumber(auth, formattedPhone, window.recaptchaVerifier);
             window.confirmationResult = confirmationResult;
             setStep(2);
         } catch (err) { 
             console.error(err);
-            alert('Failed to send OTP via Firebase.'); 
+            const isCaptchaError = err.code === 'auth/captcha-check-failed' || err.message?.includes('captcha') || err.message?.includes('Hostname') || err.message?.includes('hostname');
+            if (isCaptchaError) {
+                setShowFirebaseDomainNotice(true);
+            } else {
+                setError(`Firebase Auth Error (${err.code || 'UNKNOWN'}): ${err.message || 'Check console logs'}`); 
+            }
         }
         setLoading(false);
     };
@@ -50,6 +80,7 @@ const AstrologerApplication = ({ onLogin }) => {
     const handleVerifyOtp = async (e) => {
         if (e) e.preventDefault();
         setLoading(true);
+        setError('');
         try {
             const result = await window.confirmationResult.confirm(otp);
             const idToken = await result.user.getIdToken();
@@ -64,10 +95,14 @@ const AstrologerApplication = ({ onLogin }) => {
                 localStorage.setItem('token', data.token);
                 onLogin && onLogin(data.user);
                 setStep(3); // MANDATORY: Move to mandatory professional details
-            } else alert(data.error || 'Verification failed on backend.');
+            } else {
+                setError(data.error || 'Verification failed on backend.');
+                alert(data.error || 'Verification failed on backend.');
+            }
         } catch (err) { 
             console.error(err);
-            alert('Invalid Code or network error.'); 
+            setError(err.message || 'Invalid Code or network error.');
+            alert(err.message || 'Invalid Code or network error.'); 
         }
         setLoading(false);
     };
@@ -122,6 +157,23 @@ const AstrologerApplication = ({ onLogin }) => {
                         </div>
                     )}
 
+                    {showFirebaseDomainNotice && (
+                        <div style={{ background: 'rgba(255, 74, 74, 0.08)', border: '1px solid rgba(255, 74, 74, 0.25)', borderRadius: '12px', padding: '1.25rem', marginBottom: '1.5rem', textAlign: 'left' }}>
+                            <h4 style={{ margin: '0 0 0.5rem 0', color: '#ff4a4a', fontSize: '0.9rem', fontWeight: 700 }}>⚠️ Firebase Domain Integration Required</h4>
+                            <p style={{ margin: '0', fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: '1.5' }}>
+                                To enable live SMS verification on <strong>{window.location.hostname}</strong>, add this domain to the <strong>Authorized Domains</strong> list in your Firebase Console (<em>Authentication &gt; Settings &gt; Authorized Domains</em>).
+                            </p>
+                        </div>
+                    )}
+
+                    {error && !showFirebaseDomainNotice && (
+                        <div style={{ background: 'rgba(255, 74, 74, 0.1)', color: '#ff4a4a', padding: '1rem', borderRadius: '12px', fontSize: '0.9rem', marginBottom: '1.5rem', textAlign: 'center', border: '1px solid rgba(255, 74, 74, 0.2)' }}>
+                            {error}
+                        </div>
+                    )}
+
+
+
                     {step === 1 && (
                         <form onSubmit={handleSendOtp} className="fade-in">
                             <h2 style={{ fontSize: '2.25rem', marginBottom: '1rem', fontFamily: 'Outfit' }}>Join as Expert</h2>
@@ -134,6 +186,7 @@ const AstrologerApplication = ({ onLogin }) => {
                             <button type="submit" className="btn btn-primary btn-block btn-lg" disabled={loading} style={{ fontWeight: 800 }}>
                                 {loading ? 'Processing...' : 'Send Verification OTP'}
                             </button>
+
                         </form>
                     )}
 

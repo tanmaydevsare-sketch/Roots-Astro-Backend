@@ -9,6 +9,7 @@ import ClientDashboard from './pages/ClientDashboard';
 import AstrologerDashboard from './pages/AstrologerDashboard';
 import WriterDashboard from './pages/WriterDashboard';
 import AdminDashboard from './pages/AdminDashboard';
+import AdminLogin from './pages/AdminLogin';
 import InfoPage from './pages/InfoPage';
 import { SettingsProvider } from './context/SettingsContext';
 
@@ -32,9 +33,23 @@ function App() {
     catch { return null; }
   });
 
+  useEffect(() => {
+    if (window.location.hostname === 'roots-astro.web.app' || window.location.hostname === 'roots-astro.firebaseapp.com') {
+      window.location.replace('https://rootsastro.com' + window.location.pathname + window.location.search + window.location.hash);
+    }
+  }, []);
+
   const login = (userData) => {
     setUser(userData);
     localStorage.setItem('rootsastro_user', JSON.stringify(userData));
+  };
+
+  const handleUserUpdate = (updatedUserData) => {
+    setUser(prev => {
+      const merged = { ...prev, ...updatedUserData };
+      localStorage.setItem('rootsastro_user', JSON.stringify(merged));
+      return merged;
+    });
   };
 
   const logout = () => {
@@ -64,7 +79,8 @@ function App() {
         <Route path="/login" element={user ? <Navigate to={getDashLink(user.role)} replace /> : <Login onLogin={login} portal="CLIENT" />} />
         <Route path="/login/astrologer" element={user ? <Navigate to={getDashLink(user.role)} replace /> : <Login onLogin={login} portal="ASTROLOGER" />} />
         <Route path="/login/writer" element={user ? <Navigate to={getDashLink(user.role)} replace /> : <Login onLogin={login} portal="WRITER" />} />
-        <Route path="/login/admin" element={user ? <Navigate to={getDashLink(user.role)} replace /> : <Login onLogin={login} portal="ADMIN" />} />
+        <Route path="/admin-login" element={<Navigate to="/admin" replace />} />
+        <Route path="/login/admin" element={<Navigate to="/admin" replace />} />
         
         {/* Signup: Intelligently handles role/state internally */}
         <Route path="/signup" element={user ? <Navigate to={getDashLink(user.role)} replace /> : <Signup onLogin={login} />} />
@@ -73,12 +89,18 @@ function App() {
         <Route path="/apply" element={<AstrologerApplication onLogin={login} />} />
         
         {/* Protected Dashboard Routes */}
-        <Route path="/client" element={<Guard user={user} allowed={['CLIENT']}><ClientDashboard user={user} /></Guard>} />
-        <Route path="/astrologer" element={<Guard user={user} allowed={['ASTROLOGER']}><AstrologerDashboard user={user} /></Guard>} />
+        <Route path="/client" element={<Guard user={user} allowed={['CLIENT']}><ClientDashboard user={user} onUserUpdate={handleUserUpdate} /></Guard>} />
+        <Route path="/astrologer" element={<Guard user={user} allowed={['ASTROLOGER']}><AstrologerDashboard user={user} onUserUpdate={handleUserUpdate} /></Guard>} />
         <Route path="/writer" element={<Guard user={user} allowed={['WRITER']}><WriterDashboard user={user} /></Guard>} />
         
         {/* Admin Panels */}
-        <Route path="/admin" element={<Guard user={user} allowed={['ADMIN', 'SUPERADMIN']}><AdminDashboard user={user} /></Guard>} />
+        <Route path="/admin" element={
+          user && (user.role === 'ADMIN' || user.role === 'SUPERADMIN') ? (
+            <AdminDashboard user={user} />
+          ) : (
+            <AdminLogin onLogin={login} />
+          )
+        } />
         
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

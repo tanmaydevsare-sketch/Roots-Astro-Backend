@@ -5696,3 +5696,23 @@ html {
     flex-direction: row !important;
   }
 }
+
+/* --- reCAPTCHA Floating Badge & Container Positioning --- */
+.grecaptcha-badge {
+  position: fixed !important;
+  bottom: 20px !important;
+  right: 20px !important;
+  z-index: 9999999 !important;
+  box-shadow: 0px 4px 16px rgba(0, 0, 0, 0.4) !important;
+  border-radius: 8px !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+#recaptcha-container {
+  position: absolute !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}

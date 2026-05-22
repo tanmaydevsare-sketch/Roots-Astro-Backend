@@ -20,7 +20,15 @@ router.get('/', authMiddleware, async (req, res) => {
             where: req.user.role === 'ASTROLOGER' ? { astrologerId: req.user.id } : { clientId: req.user.id },
             include: {
                 client: { select: { firstName: true, lastName: true, email: true } },
-                astrologer: { select: { firstName: true, lastName: true, email: true } }
+                astrologer: { 
+                    select: { 
+                        firstName: true, 
+                        lastName: true, 
+                        email: true,
+                        astrologerProfile: true
+                    } 
+                },
+                service: true
             }
         });
         res.json(bookings);

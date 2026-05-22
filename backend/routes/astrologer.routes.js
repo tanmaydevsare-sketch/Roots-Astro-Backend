@@ -142,13 +142,38 @@ router.get('/profile/me', authMiddleware, roleMiddleware(['ASTROLOGER']), async 
  *       200: { description: Profile updated successfully }
  */
 router.patch('/profile/update', authMiddleware, roleMiddleware(['ASTROLOGER']), async (req, res) => {
-    const { firstName, lastName, phone, city, country, dob, gender, rate, ...profileData } = req.body;
+    const { firstName, lastName, phone, city, country, dob, gender, rate, name, certifications, ...profileData } = req.body;
     try {
+        let finalFirstName = firstName;
+        let finalLastName = lastName;
+        if (name && !firstName && !lastName) {
+            const parts = name.trim().split(/\s+/);
+            finalFirstName = parts[0];
+            finalLastName = parts.slice(1).join(' ');
+        }
+
         // Update user fields
         await prisma.user.update({
             where: { id: req.user.id },
-            data: { firstName, lastName, phone, city, country, dob, gender }
+            data: { 
+                firstName: finalFirstName, 
+                lastName: finalLastName, 
+                phone, city, country, dob, gender 
+            }
         });
+
+        if (certifications !== undefined) {
+            profileData.certification = certifications;
+        }
+
+        // Clean up any extra fields that might not exist on the schema
+        delete profileData.id;
+        delete profileData.userId;
+        delete profileData.user;
+        delete profileData.services;
+        delete profileData.bookings;
+        delete profileData.availability;
+        delete profileData.reviews;
 
         // Update profile fields
         const updated = await prisma.astrologerProfile.update({
@@ -172,8 +197,12 @@ router.patch('/profile/update', authMiddleware, roleMiddleware(['ASTROLOGER']), 
             }
         }
 
-        res.json({ message: 'Profile updated successfully', profile: updated });
+        const fullUser = await prisma.user.findUnique({ where: { id: req.user.id } });
+        if (fullUser) delete fullUser.password;
+
+        res.json({ message: 'Profile updated successfully', profile: updated, user: fullUser });
     } catch (error) {
+        console.error('[ASTRO_PROFILE_UPDATE_ERROR]', error);
         res.status(500).json({ error: error.message });
     }
 });

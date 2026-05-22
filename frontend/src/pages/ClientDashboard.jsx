@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, User, CreditCard, Video, Star, Search, ExternalLink, Bell, CheckCircle, XCircle, FileText, Zap, Shield, Plus, Smartphone, Globe } from 'lucide-react';
+import { Calendar, Clock, User, CreditCard, Video, Star, Search, ExternalLink, Bell, CheckCircle, XCircle, FileText, Zap, Shield, Plus, Smartphone, Globe, MessageCircle } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 
 import { Modal, StatCard, StatusBadge, EmptyState, AstrologerCard, BookingModal, DashboardLayout, SidebarBtn, FormField } from '../components/Shared';
@@ -7,26 +7,79 @@ import { ASTROLOGERS, INITIAL_CLIENT_BOOKINGS, WALLET_TRANSACTIONS, INITIAL_NOTI
 import { LayoutGrid, List, Table as TableIcon } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
 import API_URL from '../api/config';
+import RealTimeChat from '../components/RealTimeChat';
 
+const CosmicLoader = () => (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '300px', width: '100%' }}>
+        <style>{`
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+            @keyframes pulse {
+                0%, 100% { opacity: 0.6; transform: scale(0.98); }
+                50% { opacity: 1; transform: scale(1.02); }
+            }
+        `}</style>
+        <div style={{
+            width: '60px',
+            height: '60px',
+            borderRadius: '50%',
+            border: '2px solid rgba(212, 175, 55, 0.1)',
+            borderTop: '2px solid #D4AF37',
+            borderRight: '2px solid #D4AF37',
+            animation: 'spin 1.5s linear infinite',
+            position: 'relative',
+            marginBottom: '1.5rem',
+            boxShadow: '0 0 15px rgba(212, 175, 55, 0.2)'
+        }}>
+            <div style={{
+                position: 'absolute',
+                top: '6px',
+                left: '6px',
+                right: '6px',
+                bottom: '6px',
+                borderRadius: '50%',
+                border: '2px solid rgba(138, 43, 226, 0.1)',
+                borderBottom: '2px solid #8A2BE2',
+                borderLeft: '2px solid #8A2BE2',
+                animation: 'spin 1s linear infinite reverse'
+            }} />
+        </div>
+        <p style={{
+            fontSize: '1rem',
+            color: 'var(--text-muted)',
+            fontFamily: "'Outfit', sans-serif",
+            animation: 'pulse 2s ease-in-out infinite',
+            letterSpacing: '0.05em',
+            margin: 0
+        }}>Aligning with the cosmos...</p>
+    </div>
+);
 
-const ClientDashboard = ({ user }) => {
+const ClientDashboard = ({ user, onUserUpdate }) => {
     const { currencySymbol } = useSettings();
     const [searchParams, setSearchParams] = useSearchParams();
     const tab = searchParams.get('tab') || 'overview';
     const setTab = (t) => setSearchParams({ tab: t });
 
-    const [bookings, setBookings] = useState(INITIAL_CLIENT_BOOKINGS);
+    const [bookings, setBookings] = useState([]);
+    const [astrologers, setAstrologers] = useState([]);
+    const [bookingsLoading, setBookingsLoading] = useState(true);
+    const [astrosLoading, setAstrosLoading] = useState(true);
     const [walletBalance, setWalletBalance] = useState(0);
     const [transactions, setTransactions] = useState([]);
     const [walletLoading, setWalletLoading] = useState(true);
     const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
     const [bookingTarget, setBookingTarget] = useState(null);
     const [bookingOpen, setBookingOpen] = useState(false);
+    const [activeChat, setActiveChat] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [addFunds, setAddFunds] = useState('');
     const [profile, setProfile] = useState({ firstName: user?.firstName || '', lastName: user?.lastName || '', email: user?.email || '', phone: user?.phone || '', dob: user?.dob || '', gender: user?.gender || '', city: user?.city || '', country: user?.country || '' });
     const [profileSaved, setProfileSaved] = useState(false);
+    const [profileError, setProfileError] = useState('');
     const [profileLoading, setProfileLoading] = useState(false);
     const [serviceFilter, setServiceFilter] = useState('all');
     const [viewMode, setViewMode] = useState('grid');
@@ -38,10 +91,7 @@ const ClientDashboard = ({ user }) => {
     const [passwordLoading, setPasswordLoading] = useState(false);
     const [passwordError, setPasswordError] = useState('');
     const [passwordSuccess, setPasswordSuccess] = useState(false);
-    const [paymentMethods, setPaymentMethods] = useState([
-        { id: 1, type: 'CARD', detail: 'Visa ending in 4421', expiry: '12/28', isDefault: true },
-        { id: 2, type: 'UPI', detail: 'user@okaxis', isDefault: false }
-    ]);
+    const [paymentMethods, setPaymentMethods] = useState([]);
     const [isAddPaymentOpen, setIsAddPaymentOpen] = useState(false);
     const [newPayment, setNewPayment] = useState({ type: 'CARD', detail: '', expiry: '' });
 
@@ -67,6 +117,8 @@ const ClientDashboard = ({ user }) => {
             .catch(err => console.error("Settings fetch failed", err));
 
         fetchWalletStats();
+        fetchBookings();
+        fetchAstrologers();
 
         // Load Razorpay Script
         const script = document.createElement('script');
@@ -95,6 +147,83 @@ const ClientDashboard = ({ user }) => {
             }
         } catch (err) { console.error("Wallet fetch failed", err); }
         finally { setWalletLoading(false); }
+    };
+
+    const fetchBookings = async () => {
+        const token = localStorage.getItem('token');
+        try {
+            setBookingsLoading(true);
+            const res = await fetch(`${API_URL}/api/bookings`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                const commissionRate = PLATFORM_CONFIG.commissionRate || 0.20;
+                setBookings((data || []).map(b => {
+                    const scheduledDate = new Date(b.scheduledAt);
+                    const dateFormatted = scheduledDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                    const timeFormatted = scheduledDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+                    const astroName = b.astrologer ? `${b.astrologer.firstName} ${b.astrologer.lastName}` : "Expert Astrologer";
+                    const amount = Number(b.amount) || 0;
+                    return {
+                        id: b.id,
+                        astrologer: astroName,
+                        astrologerId: b.astrologerId,
+                        status: (b.status || 'upcoming').toLowerCase(),
+                        service: b.service?.title || "Natal Chart Analysis",
+                        date: dateFormatted,
+                        time: timeFormatted,
+                        amount: amount,
+                        platformFee: +(amount * commissionRate).toFixed(2),
+                        astrologerReceives: +(amount * (1 - commissionRate)).toFixed(2),
+                        zoomLink: b.zoomMeetingUrl,
+                        raw: b
+                    };
+                }));
+            }
+        } catch (err) {
+            console.error("Failed to fetch bookings", err);
+        } finally {
+            setBookingsLoading(false);
+        }
+    };
+
+    const fetchAstrologers = async () => {
+        try {
+            setAstrosLoading(true);
+            const res = await fetch(`${API_URL}/api/astrologers`);
+            if (res.ok) {
+                const data = await res.json();
+                setAstrologers((data || []).map(u => {
+                    const prof = u.astrologerProfile || {};
+                    const rating = Number(prof.rating) || 5.0;
+                    const reviewsCount = prof.reviews?.length || 0;
+                    const name = `${u.firstName} ${u.lastName}`;
+                    const expertiseArray = prof.expertise ? prof.expertise.split(',').map(e => e.trim()).filter(Boolean) : ["Vedic Astrology"];
+                    const languages = prof.languages || "English";
+                    const bio = prof.bio || "Verified professional astrologer guidance.";
+                    const rate = parseFloat(prof.rate || "50");
+                    const sessionsCount = 120 + (prof.bookings?.length || 0);
+                    return {
+                        id: u.id,
+                        name: name,
+                        rating: rating,
+                        reviews: reviewsCount,
+                        languages: languages,
+                        expertise: expertiseArray,
+                        bio: bio,
+                        rate: rate,
+                        sessions: sessionsCount,
+                        available: prof.isOnline ?? true,
+                        astrologerProfile: prof
+                    };
+                }));
+            }
+        } catch (err) {
+            console.error("Failed to fetch astrologers", err);
+        } finally {
+            setAstrosLoading(false);
+        }
     };
 
     const handleAddFunds = async () => {
@@ -189,10 +318,7 @@ const ClientDashboard = ({ user }) => {
                     setWalletBalance(data.newBalance);
                     fetchWalletStats(); // Refresh history
                 }
-                // Refresh bookings from server (if you had a fetchBookings)
-                // For now, update local state
-                const newBooking = { id: data.booking?.id || Date.now(), ...booking };
-                setBookings(prev => [newBooking, ...prev]);
+                fetchBookings(); // Refresh live bookings from backend
             } else {
                 const err = await res.json();
                 alert(err.error || "Booking failed");
@@ -228,6 +354,7 @@ const ClientDashboard = ({ user }) => {
 
     const handleSaveProfile = async () => {
         setProfileLoading(true);
+        setProfileError('');
         const token = localStorage.getItem('token');
         try {
             const res = await fetch(`${API_URL}/api/auth/me`, {
@@ -235,15 +362,24 @@ const ClientDashboard = ({ user }) => {
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify(profile)
             });
+            const data = await res.json();
             if (res.ok) {
                 setProfileSaved(true);
                 setTimeout(() => setProfileSaved(false), 2500);
+                if (onUserUpdate) {
+                    onUserUpdate(data);
+                }
+            } else {
+                setProfileError(data.error || 'Failed to update profile details.');
             }
-        } catch (err) { console.error("Profile save fail", err); }
+        } catch (err) { 
+            console.error("Profile save fail", err); 
+            setProfileError('Failed to save profile. Please check your network connection.');
+        }
         setProfileLoading(false);
     };
 
-    const filteredAstros = ASTROLOGERS.filter(a => {
+    const filteredAstros = astrologers.filter(a => {
         const matchesSearch = a.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
             a.expertise.some(e => e.toLowerCase().includes(searchQuery.toLowerCase()));
         const matchesService = serviceFilter === 'all' || a.expertise.some(e => e.toLowerCase().includes(serviceFilter.toLowerCase()));
@@ -409,13 +545,20 @@ const ClientDashboard = ({ user }) => {
                                                     <strong style={{ display: 'block', fontSize: '1rem' }}>{b.astrologer}</strong>
                                                     <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{b.service} · {b.date} at {b.time}</span>
                                                 </div>
-                                                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                                                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                                                     <StatusBadge status={b.status} />
                                                     {b.zoomLink && (
                                                         <a href={b.zoomLink} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm">
                                                             <ExternalLink size={13} /> Join
                                                         </a>
                                                     )}
+                                                    <button 
+                                                        className="btn btn-outline btn-sm" 
+                                                        style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '0.4rem 0.6rem' }}
+                                                        onClick={() => setActiveChat({ bookingId: b.id, recipientName: b.astrologer })}
+                                                    >
+                                                        <MessageCircle size={13} /> Chat
+                                                    </button>
                                                 </div>
                                             </div>
                                         ))}
@@ -452,7 +595,7 @@ const ClientDashboard = ({ user }) => {
                                 <h3 style={{ marginBottom: '1.25rem' }}>Quick Book</h3>
                                 <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>Top rated experts available now for immediate guidance.</p>
                                 <div className="astro-mini-grid">
-                                    {ASTROLOGERS.filter(a => a.available).slice(0, 3).map(a => (
+                                    {astrologers.filter(a => a.available).slice(0, 3).map(a => (
                                         <div key={a.id} className="astro-mini-card" style={{ padding: '0.75rem', marginBottom: '0.75rem', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid var(--glass-border)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
                                             <div className="astro-avatar" style={{ width: 40, height: 40, fontSize: '0.9rem' }}>{a.name.charAt(0)}</div>
                                             <div style={{ flex: 1 }}>
@@ -550,59 +693,67 @@ const ClientDashboard = ({ user }) => {
                         ))}
                     </div>
 
-                    {viewMode === 'grid' && (
-                        <div className="astro-grid">
-                            {filteredAstros.map(a => <AstrologerCard key={a.id} astro={a} onBook={handleBook} />)}
-                        </div>
-                    )}
-
-                    {viewMode === 'list' && (
-                        <div className="sessions-list">
-                            {filteredAstros.map(a => (
-                                <div key={a.id} className="glass-card" style={{ padding: '1.25rem', marginBottom: '1rem', display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
-                                    <div className="astro-avatar" style={{ width: 64, height: 64 }}>{a.name.charAt(0)}</div>
-                                    <div style={{ flex: 1 }}>
-                                        <h3 style={{ margin: 0 }}>{a.name}</h3>
-                                        <div className="astro-stars" style={{ margin: '0.25rem 0' }}>
-                                            {[1, 2, 3, 4, 5].map(i => <Star key={i} size={13} fill={i <= Math.round(a.rating) ? '#D4AF37' : 'none'} color="#D4AF37" />)}
-                                            <span style={{ fontSize: '0.8rem' }}>{a.rating} ({a.reviews})</span>
-                                        </div>
-                                        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: '0.5rem 0' }}>{a.expertise.join(' · ')}</p>
-                                        <span className="astro-rate">{currencySymbol}{a.rate}<small>/session</small></span>
-                                    </div>
-                                    <button className="btn btn-primary" onClick={() => handleBook(a)}>Book Now</button>
+                    {astrosLoading ? (
+                        <CosmicLoader />
+                    ) : filteredAstros.length === 0 ? (
+                        <EmptyState icon={<Search size={36} color="var(--text-muted)" />} title="No guides found" description="No astrologers matched your filters or search query." />
+                    ) : (
+                        <>
+                            {viewMode === 'grid' && (
+                                <div className="astro-grid">
+                                    {filteredAstros.map(a => <AstrologerCard key={a.id} astro={a} onBook={handleBook} />)}
                                 </div>
-                            ))}
-                        </div>
-                    )}
+                            )}
 
-                    {viewMode === 'table' && (
-                        <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
-                            <table className="dash-table">
-                                <thead>
-                                    <tr>
-                                        <th>Astrologer</th>
-                                        <th>Expertise</th>
-                                        <th>Rating</th>
-                                        <th>Rate</th>
-                                        <th>Status</th>
-                                        <th>Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
+                            {viewMode === 'list' && (
+                                <div className="sessions-list">
                                     {filteredAstros.map(a => (
-                                        <tr key={a.id}>
-                                            <td><div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}><div className="astro-avatar" style={{ width: 32, height: 32, fontSize: '0.8rem' }}>{a.name.charAt(0)}</div><strong>{a.name}</strong></div></td>
-                                            <td>{a.expertise.slice(0, 2).join(', ')}</td>
-                                            <td>{a.rating}★</td>
-                                            <td><strong className="gold-text">{currencySymbol}{a.rate}</strong></td>
-                                            <td><span className={`avail-dot ${a.available ? 'online' : 'offline'}`} />{a.available ? 'Online' : 'Away'}</td>
-                                            <td><button className="btn btn-ghost btn-sm" onClick={() => setSelectedAstro(a)}>View Profile</button></td>
-                                        </tr>
+                                        <div key={a.id} className="glass-card" style={{ padding: '1.25rem', marginBottom: '1rem', display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
+                                            <div className="astro-avatar" style={{ width: 64, height: 64 }}>{a.name.charAt(0)}</div>
+                                            <div style={{ flex: 1 }}>
+                                                <h3 style={{ margin: 0 }}>{a.name}</h3>
+                                                <div className="astro-stars" style={{ margin: '0.25rem 0' }}>
+                                                    {[1, 2, 3, 4, 5].map(i => <Star key={i} size={13} fill={i <= Math.round(a.rating) ? '#D4AF37' : 'none'} color="#D4AF37" />)}
+                                                    <span style={{ fontSize: '0.8rem' }}>{a.rating} ({a.reviews})</span>
+                                                </div>
+                                                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: '0.5rem 0' }}>{a.expertise.join(' · ')}</p>
+                                                <span className="astro-rate">{currencySymbol}{a.rate}<small>/session</small></span>
+                                            </div>
+                                            <button className="btn btn-primary" onClick={() => handleBook(a)}>Book Now</button>
+                                        </div>
                                     ))}
-                                </tbody>
-                            </table>
-                        </div>
+                                </div>
+                            )}
+
+                            {viewMode === 'table' && (
+                                <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
+                                    <table className="dash-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Astrologer</th>
+                                                <th>Expertise</th>
+                                                <th>Rating</th>
+                                                <th>Rate</th>
+                                                <th>Status</th>
+                                                <th>Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {filteredAstros.map(a => (
+                                                <tr key={a.id}>
+                                                    <td><div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}><div className="astro-avatar" style={{ width: 32, height: 32, fontSize: '0.8rem' }}>{a.name.charAt(0)}</div><strong>{a.name}</strong></div></td>
+                                                    <td>{a.expertise.slice(0, 2).join(', ')}</td>
+                                                    <td>{a.rating}★</td>
+                                                    <td><strong className="gold-text">{currencySymbol}{a.rate}</strong></td>
+                                                    <td><span className={`avail-dot ${a.available ? 'online' : 'offline'}`} />{a.available ? 'Online' : 'Away'}</td>
+                                                    <td><button className="btn btn-ghost btn-sm" onClick={() => setSelectedAstro(a)}>View Profile</button></td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
             )}
@@ -621,7 +772,9 @@ const ClientDashboard = ({ user }) => {
                     </div>
 
                     <div className="sessions-list">
-                        {filteredBookings.length === 0 ? (
+                        {bookingsLoading ? (
+                            <CosmicLoader />
+                        ) : filteredBookings.length === 0 ? (
                             <EmptyState icon={<Calendar size={36} color="var(--text-muted)" />} title="No bookings found" description="You haven't made any bookings in this category yet." />
                         ) : (
                             filteredBookings.map(b => (
@@ -654,10 +807,22 @@ const ClientDashboard = ({ user }) => {
                                         </div>
 
                                         <div className="booking-actions-col">
-                                            {b.status === 'upcoming' && b.zoomLink && (
-                                                <a href={b.zoomLink} target="_blank" rel="noopener noreferrer" className="btn btn-primary">
-                                                    <Video size={16} style={{ marginRight: '8px' }} /> Join Session
-                                                </a>
+                                            {b.status === 'upcoming' && (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%' }}>
+                                                    {b.zoomLink && (
+                                                        <a href={b.zoomLink} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-block" style={{ justifyContent: 'center' }}>
+                                                            <Video size={16} style={{ marginRight: '8px' }} /> Join Session
+                                                        </a>
+                                                    )}
+                                                    <button 
+                                                        type="button"
+                                                        className="btn btn-outline btn-block" 
+                                                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                                                        onClick={() => setActiveChat({ bookingId: b.id, recipientName: b.astrologer })}
+                                                    >
+                                                        <MessageCircle size={16} /> Chat with Expert
+                                                    </button>
+                                                </div>
                                             )}
                                             {b.status === 'completed' && (
                                                 <>
@@ -861,7 +1026,7 @@ const ClientDashboard = ({ user }) => {
                             <div className="profile-edit-grid">
                                 <FormField label="First Name"><input className="form-input" value={profile.firstName} onChange={e => setProfile({ ...profile, firstName: e.target.value })} /></FormField>
                                 <FormField label="Last Name"><input className="form-input" value={profile.lastName} onChange={e => setProfile({ ...profile, lastName: e.target.value })} /></FormField>
-                                <FormField label="Email"><input className="form-input" type="email" value={profile.email} readOnly style={{ opacity: 0.6 }} /></FormField>
+                                <FormField label="Email"><input className="form-input" type="email" value={profile.email} onChange={e => setProfile({ ...profile, email: e.target.value })} /></FormField>
                                 <FormField label="Phone"><input className="form-input" value={profile.phone} onChange={e => setProfile({ ...profile, phone: e.target.value })} /></FormField>
                                 <FormField label="Birthday"><input className="form-input" type="date" value={profile.dob} onChange={e => setProfile({ ...profile, dob: e.target.value })} /></FormField>
                                 <FormField label="Gender">
@@ -870,9 +1035,10 @@ const ClientDashboard = ({ user }) => {
                                     </select>
                                 </FormField>
                             </div>
-                            <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem', alignItems: 'center', flexWrap: 'wrap' }}>
                                 <button className="btn btn-primary" onClick={handleSaveProfile} disabled={profileLoading}>{profileLoading ? 'Saving...' : 'Save Profile'}</button>
                                 {profileSaved && <span style={{ color: '#1cc88a', fontSize: '0.9rem', fontWeight: 600 }}>✓ Changes saved successfully.</span>}
+                                {profileError && <span style={{ color: '#ff4a4a', fontSize: '0.9rem', fontWeight: 600 }}>✗ {profileError}</span>}
                             </div>
                         </div>
 
@@ -888,6 +1054,14 @@ const ClientDashboard = ({ user }) => {
                         </div>
                     </div>
                 </div>
+            )}
+            {activeChat && (
+                <RealTimeChat 
+                    bookingId={activeChat.bookingId} 
+                    user={user} 
+                    recipientName={activeChat.recipientName} 
+                    onClose={() => setActiveChat(null)} 
+                />
             )}
         </DashboardLayout>
     );

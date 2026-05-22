@@ -3,11 +3,12 @@ import { useSettings } from '../context/SettingsContext';
 import { useSearchParams } from 'react-router-dom';
 import {
     Calendar, User, CreditCard, Video, Star, Plus, Edit, Trash2, ExternalLink,
-    MessageSquare, AlertTriangle, Check, CheckCircle, Clock, X, XCircle, Settings, Zap, ArrowDownCircle, Smartphone, Lock, Shield, Wallet, DollarSign
+    MessageSquare, AlertTriangle, Check, CheckCircle, Clock, X, XCircle, Settings, Zap, ArrowDownCircle, Smartphone, Lock, Shield, Wallet, DollarSign, MessageCircle
 } from 'lucide-react';
 import API_URL from '../api/config';
 import { StatCard, StatusBadge, EmptyState, Modal, DashboardLayout, SidebarBtn, FormField } from '../components/Shared';
 import { ASTROLOGER_SERVICES_DEFAULT, DAYS_OF_WEEK, ASTROLOGER_BOOKINGS, ASTROLOGER_EARNINGS, ASTROLOGER_FINANCE, PLATFORM_CONFIG } from '../data/mockData';
+import RealTimeChat from '../components/RealTimeChat';
 
 const ALL_TIMES = ['06:00', '07:00', '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00', '21:00', '22:00'];
 const PROBLEM_NOTES = {
@@ -91,7 +92,7 @@ const PreviewPanel = ({ previewDay, setPreviewDay, previewSlots, weeklySchedule,
     </div>
 );
 
-const AstrologerDashboard = ({ user }) => {
+const AstrologerDashboard = ({ user, onUserUpdate }) => {
     const { currencySymbol } = useSettings();
     const [searchParams, setSearchParams] = useSearchParams();
     const tab = searchParams.get('tab') || 'overview';
@@ -99,6 +100,7 @@ const AstrologerDashboard = ({ user }) => {
     const [bookings, setBookings] = useState(ASTROLOGER_BOOKINGS);
     const [services, setServices] = useState(ASTROLOGER_SERVICES_DEFAULT);
     const [earnings] = useState(ASTROLOGER_EARNINGS);
+    const [activeChat, setActiveChat] = useState(null);
 
     /* ── Schedule state ── */
     const [weeklySchedule, setWeeklySchedule] = useState(INIT_WEEKLY);
@@ -111,7 +113,7 @@ const AstrologerDashboard = ({ user }) => {
     /* ── Payment Gateway State (Simulated) ── */
     const [paymentGateways, setPaymentGateways] = useState({
         razorpay: { connected: false, keyId: 'rzp_test_7a2s9K...' },
-        paypal: { connected: true, email: 'payouts@acharya-rajesh.com' }
+        paypal: { connected: false, email: '' }
     });
     const [passwordError, setPasswordError] = useState('');
     const [passwordSuccess, setPasswordSuccess] = useState(false);
@@ -207,7 +209,7 @@ const AstrologerDashboard = ({ user }) => {
                     setBookings(bData.map(b => ({
                         id: b.id,
                         clientRef: `${b.client.firstName} (#${b.id})`,
-                        service: `Service #${b.serviceId}`,
+                        service: b.service?.title || `Service #${b.serviceId}`,
                         date: new Date(b.scheduledAt).toLocaleDateString(),
                         time: new Date(b.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                         status: b.status.toLowerCase(),
@@ -754,15 +756,23 @@ const AstrologerDashboard = ({ user }) => {
                                             </div>
 
                                             <div className="shelf-card-footer" style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                                                <button className="btn btn-primary btn-sm btn-block" onClick={() => startSession(b)} style={{ gap: '0.6rem', padding: '0.8rem' }}>
+                                                <button className="btn btn-primary btn-sm btn-block" onClick={() => startSession(b)} style={{ gap: '0.6rem', padding: '0.8rem', justifyContent: 'center' }}>
                                                     <Video size={16} /> Enter Room
                                                 </button>
+                                                <button 
+                                                    type="button"
+                                                    className="btn btn-outline btn-sm btn-block" 
+                                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '0.6rem' }}
+                                                    onClick={() => setActiveChat({ bookingId: b.id, recipientName: b.clientRef })}
+                                                >
+                                                    <MessageCircle size={14} /> Chat with Client
+                                                </button>
                                                 <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                                    <button className="btn btn-outline btn-sm" style={{ flex: 1, fontSize: '0.75rem', padding: '0.6rem' }} onClick={() => openReschedule(b)}>
-                                                        <Calendar size={14} /> Reschedule
+                                                    <button className="btn btn-outline btn-sm" style={{ flex: 1, fontSize: '0.75rem', padding: '0.6rem', justifyContent: 'center' }} onClick={() => openReschedule(b)}>
+                                                        <Calendar size={14} style={{ marginRight: '2px' }} /> Resched
                                                     </button>
-                                                    <button className="btn btn-sm" style={{ flex: 1, fontSize: '0.75rem', background: 'rgba(255,74,74,0.1)', color: '#ff4a4a', border: '1px solid rgba(255,74,74,0.2)', padding: '0.6rem' }} onClick={() => setCancelConfirm(b.id)}>
-                                                        <XCircle size={14} /> Cancel
+                                                    <button className="btn btn-sm" style={{ flex: 1, fontSize: '0.75rem', background: 'rgba(255,74,74,0.1)', color: '#ff4a4a', border: '1px solid rgba(255,74,74,0.2)', padding: '0.6rem', justifyContent: 'center' }} onClick={() => setCancelConfirm(b.id)}>
+                                                        <XCircle size={14} style={{ marginRight: '2px' }} /> Cancel
                                                     </button>
                                                 </div>
                                             </div>
@@ -926,6 +936,14 @@ const AstrologerDashboard = ({ user }) => {
                                         <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', gap: '0.5rem', padding: '0.65rem' }} onClick={() => startSession(b)}>
                                             <Video size={14} /> Start Session
                                         </button>
+                                        <button 
+                                            type="button"
+                                            className="btn btn-outline" 
+                                            style={{ width: '100%', justifyContent: 'center', gap: '0.5rem', padding: '0.65rem', display: 'flex', alignItems: 'center' }}
+                                            onClick={() => setActiveChat({ bookingId: b.id, recipientName: b.clientRef })}
+                                        >
+                                            <MessageCircle size={14} /> Chat with Client
+                                        </button>
                                         <div style={{ display: 'flex', gap: '0.5rem' }}>
                                             <button className="btn btn-outline btn-sm" style={{ flex: 1 }} onClick={() => openReschedule(b)}>Reschedule</button>
                                             <button className="btn btn-sm" style={{ flex: 1, background: 'rgba(255,74,74,0.1)', color: '#ff6b6b', border: '1px solid rgba(255,74,74,0.2)' }} onClick={() => setCancelConfirm(b.id)}>Cancel</button>
@@ -942,6 +960,14 @@ const AstrologerDashboard = ({ user }) => {
                                     <>
                                         <button className="btn btn-primary btn-sm" style={{ gap: '0.4rem' }} onClick={() => startSession(b)}>
                                             <Video size={13} /> Start Session
+                                        </button>
+                                        <button 
+                                            type="button"
+                                            className="btn btn-outline btn-sm" 
+                                            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                                            onClick={() => setActiveChat({ bookingId: b.id, recipientName: b.clientRef })}
+                                        >
+                                            <MessageCircle size={13} /> Chat with Client
                                         </button>
                                         <button className="btn btn-outline btn-sm" onClick={() => openReschedule(b)}>Reschedule</button>
                                         <button className="btn btn-sm" style={{ background: 'rgba(255,74,74,0.1)', color: '#ff6b6b', border: '1px solid rgba(255,74,74,0.2)' }} onClick={() => setCancelConfirm(b.id)}>Cancel</button>
@@ -1491,8 +1517,12 @@ const AstrologerDashboard = ({ user }) => {
                                                 body: JSON.stringify(profile)
                                             });
                                             if (res.ok) {
+                                                const data = await res.json();
                                                 setProfileSaved(true);
                                                 setTimeout(() => setProfileSaved(false), 2500);
+                                                if (onUserUpdate && data.user) {
+                                                    onUserUpdate(data.user);
+                                                }
                                             }
                                         } catch (err) { console.error("Update profile failed", err); }
                                     }}>Apply Changes</button>
@@ -1523,6 +1553,14 @@ const AstrologerDashboard = ({ user }) => {
                 </div>
             )}
             </div>
+            {activeChat && (
+                <RealTimeChat 
+                    bookingId={activeChat.bookingId} 
+                    user={user} 
+                    recipientName={activeChat.recipientName} 
+                    onClose={() => setActiveChat(null)} 
+                />
+            )}
         </DashboardLayout>
     );
 };

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Star, User, Shield, Edit3, Smartphone, Key, ArrowRight, CheckCircle, Lock } from 'lucide-react';
 import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 import { auth } from '../firebase';
@@ -22,34 +22,50 @@ const Login = ({ onLogin, portal = 'CLIENT' }) => {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [loginMethod, setLoginMethod] = useState('mobile'); // mobile or email (for clients)
+    const [showFirebaseDomainNotice, setShowFirebaseDomainNotice] = useState(false);
 
-    // Mock data for dev convenience
     useEffect(() => {
-        if (portal === 'ADMIN') { setEmail('admin@test.com'); setPassword('password123'); }
-        if (portal === 'WRITER') { setEmail('writer@test.com'); setPassword('password123'); }
-        if (portal === 'ASTROLOGER') { setEmail('astro@test.com'); setPassword('password123'); }
-        if (portal === 'CLIENT') { setEmail('client@test.com'); setPassword('password123'); }
-    }, [portal]);
+        return () => {
+            if (window.recaptchaVerifier) {
+                try {
+                    window.recaptchaVerifier.clear();
+                } catch (e) {
+                    console.error(e);
+                }
+                window.recaptchaVerifier = null;
+            }
+        };
+    }, []);
 
     const handleClientLogin = async (e) => {
         e.preventDefault();
         setError('');
+        setShowFirebaseDomainNotice(false);
         if (step === 'input') {
             if (phone.length < 10) return setError('Enter a valid mobile number.');
             setLoading(true);
             try {
-                if (!window.recaptchaVerifier) {
-                    window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-                        size: 'invisible'
-                    });
+                if (window.recaptchaVerifier) {
+                    try {
+                        window.recaptchaVerifier.clear();
+                    } catch (err) {}
+                    window.recaptchaVerifier = null;
                 }
+                window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+                    size: 'invisible'
+                });
                 const formattedPhone = `+91${phone}`; // Assuming India for now
                 const confirmationResult = await signInWithPhoneNumber(auth, formattedPhone, window.recaptchaVerifier);
                 window.confirmationResult = confirmationResult;
                 setStep('otp');
             } catch (err) { 
                 console.error(err);
-                setError('Failed to send OTP via Firebase.'); 
+                const isCaptchaError = err.code === 'auth/captcha-check-failed' || err.message?.includes('captcha') || err.message?.includes('Hostname') || err.message?.includes('hostname');
+                if (isCaptchaError) {
+                    setShowFirebaseDomainNotice(true);
+                } else {
+                    setError(`Firebase Auth Error (${err.code || 'UNKNOWN'}): ${err.message || 'Check console logs'}`); 
+                }
             }
             setLoading(false);
         } else {
@@ -71,7 +87,7 @@ const Login = ({ onLogin, portal = 'CLIENT' }) => {
                 } else setError(data.error || 'Verification failed on backend.');
             } catch (err) { 
                 console.error(err);
-                setError('Invalid OTP or network error.'); 
+                setError(err.message || 'Invalid OTP or network error.'); 
             }
             setLoading(false);
         }
@@ -212,14 +228,14 @@ const Login = ({ onLogin, portal = 'CLIENT' }) => {
                         <form onSubmit={handleStaffLogin} style={{ marginTop: portal === 'CLIENT' ? '0.5rem' : '2rem' }}>
                             <div className="form-group">
                                 <label className="form-label">Work Email</label>
-                                <input className="form-input" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
+                                <input className="form-input" type="email" value={email} onChange={e => setEmail(e.target.value)} required autoComplete="off" />
                             </div>
                             <div className="form-group">
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
                                     <label className="form-label">Password</label>
                                     <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', cursor: 'pointer' }}>Forgot?</span>
                                 </div>
-                                <input className="form-input" type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+                                <input className="form-input" type="password" value={password} onChange={e => setPassword(e.target.value)} required autoComplete="off" />
                             </div>
                             <button type="submit" className="btn btn-primary btn-block" style={{ marginTop: '1.5rem', background: portal === 'ADMIN' ? 'linear-gradient(135deg, #6B90B0 0%, #4A6E8C 100%)' : 'var(--gold-gradient)' }}>
                                 {portal === 'ADMIN' && <Lock size={14} style={{ marginRight: 8 }} />} Authorized Sign In
@@ -227,9 +243,17 @@ const Login = ({ onLogin, portal = 'CLIENT' }) => {
                         </form>
                     )}
 
-                    {error && <p className="form-error" style={{ textAlign: 'center', marginTop: '1rem' }}>{error}</p>}
+                    {showFirebaseDomainNotice && (
+                        <div style={{ background: 'rgba(255, 74, 74, 0.08)', border: '1px solid rgba(255, 74, 74, 0.25)', borderRadius: '12px', padding: '1.25rem', marginTop: '1rem', textAlign: 'left' }}>
+                            <h4 style={{ margin: '0 0 0.5rem 0', color: '#ff4a4a', fontSize: '0.9rem', fontWeight: 700 }}>⚠️ Firebase Domain Integration Required</h4>
+                            <p style={{ margin: '0', fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: '1.5' }}>
+                                To enable live SMS verification on <strong>{window.location.hostname}</strong>, add this domain to the <strong>Authorized Domains</strong> list in your Firebase Console (<em>Authentication &gt; Settings &gt; Authorized Domains</em>).
+                            </p>
+                        </div>
+                    )}
+
+                    {!showFirebaseDomainNotice && error && <p className="form-error" style={{ textAlign: 'center', marginTop: '1rem' }}>{error}</p>}
                     <div id="recaptcha-container"></div>
-                    
                     
                     <div className="login-footer-links" style={{ marginTop: '2rem', textAlign: 'center', borderTop: '1px solid var(--glass-border)', paddingTop: '1.5rem' }}>
                         {portal !== 'CLIENT' && <Link to="/login" style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>← Return to Primary Login</Link>}
