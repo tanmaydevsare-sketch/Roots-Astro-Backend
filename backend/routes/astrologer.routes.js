@@ -142,7 +142,7 @@ router.get('/profile/me', authMiddleware, roleMiddleware(['ASTROLOGER']), async 
  *       200: { description: Profile updated successfully }
  */
 router.patch('/profile/update', authMiddleware, roleMiddleware(['ASTROLOGER']), async (req, res) => {
-    const { firstName, lastName, phone, city, country, dob, gender, rate, name, certifications, ...profileData } = req.body;
+    const { firstName, lastName, phone, city, country, dob, gender, rate, name, certifications, submitApplication, ...profileData } = req.body;
     try {
         let finalFirstName = firstName;
         let finalLastName = lastName;
@@ -153,13 +153,19 @@ router.patch('/profile/update', authMiddleware, roleMiddleware(['ASTROLOGER']), 
         }
 
         // Update user fields
+        const userUpdateData = { 
+            firstName: finalFirstName, 
+            lastName: finalLastName, 
+            phone, city, country, dob, gender 
+        };
+
+        if (submitApplication) {
+            userUpdateData.status = 'PENDING';
+        }
+
         await prisma.user.update({
             where: { id: req.user.id },
-            data: { 
-                firstName: finalFirstName, 
-                lastName: finalLastName, 
-                phone, city, country, dob, gender 
-            }
+            data: userUpdateData
         });
 
         if (certifications !== undefined) {
@@ -168,6 +174,10 @@ router.patch('/profile/update', authMiddleware, roleMiddleware(['ASTROLOGER']), 
 
         if (rate !== undefined) {
             profileData.rate = rate;
+        }
+
+        if (submitApplication) {
+            profileData.status = 'PENDING_APPROVAL';
         }
 
         // Clean up any extra fields that might not exist on the schema

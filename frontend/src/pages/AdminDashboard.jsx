@@ -373,6 +373,7 @@ const AdminDashboard = ({ user }) => {
             if (res.ok) {
                 fetchPendingAstros();
                 fetchUsers();
+                fetchAstrologers();
                 setAstroDetailOpen(false);
             }
         } catch (err) { console.error("Approve astro failed", err); }
@@ -387,6 +388,7 @@ const AdminDashboard = ({ user }) => {
             });
             if (res.ok) {
                 fetchPendingAstros();
+                fetchAstrologers();
                 setAstroDetailOpen(false);
             }
         } catch (err) { console.error("Reject astro failed", err); }
@@ -760,7 +762,7 @@ const AdminDashboard = ({ user }) => {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                             {filteredAstros.map(astro => (
                                 <div key={astro.id} className="glass-card" style={{ padding: '1.5rem', display: 'flex', gap: '2rem', alignItems: 'center' }}>
-                                    <div className="profile-avatar-xl" style={{ width: 80, height: 80 }}>{astro.name.charAt(0)}</div>
+                                    <div className="profile-avatar-xl" style={{ width: 80, height: 80 }}>{astro.name?.charAt(0) || 'A'}</div>
                                     <div style={{ flex: 1 }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                             <h3 style={{ margin: 0 }}>{astro.name}</h3>
@@ -808,7 +810,7 @@ const AdminDashboard = ({ user }) => {
                 {viewAstro && (
                     <div className="fade-in">
                         <div className="profile-header" style={{ marginBottom: '1.5rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                            <div className="profile-avatar-xl" style={{ width: 64, height: 64, fontSize: '1.5rem' }}>{viewAstro.name.charAt(0)}</div>
+                            <div className="profile-avatar-xl" style={{ width: 64, height: 64, fontSize: '1.5rem' }}>{viewAstro.name?.charAt(0) || 'A'}</div>
                             <div>
                                 <h3 style={{ margin: 0 }}>{viewAstro.name}</h3>
                                 <p style={{ color: 'var(--text-muted)', margin: 0 }}>{viewAstro.email}</p>
@@ -1076,7 +1078,7 @@ const AdminDashboard = ({ user }) => {
                             {users.slice(0, 5).map(u => (
                                 <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 0', borderBottom: '1px solid var(--glass-border)' }}>
                                     <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                                        <div className="astro-mini-avatar">{u.name.charAt(0)}</div>
+                                        <div className="astro-mini-avatar">{u.name?.charAt(0) || 'U'}</div>
                                         <div><strong style={{ display: 'block', fontSize: '0.9rem' }}>{u.name}</strong><span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{u.role}</span></div>
                                     </div>
                                     <StatusBadge status={u.status} />
@@ -1123,7 +1125,7 @@ const AdminDashboard = ({ user }) => {
                                     <tr key={a.id}>
                                         <td>
                                             <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                                                <div className="astro-mini-avatar">{a.name.charAt(0)}</div>
+                                                <div className="astro-mini-avatar">{a.name?.charAt(0) || 'A'}</div>
                                                 <div>
                                                     <strong style={{ display: 'block' }}>{a.name}</strong>
                                                     <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{a.email}</span>

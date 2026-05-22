@@ -60,7 +60,7 @@ export const AstrologerCard = ({ astro, onBook }) => {
         <div className="astro-card glass-card">
             <div className="astro-card-top">
                 <div className="astro-avatar" style={{ overflow: 'hidden' }}>
-                    {astro.astrologerProfile?.image ? <img src={astro.astrologerProfile.image} alt={astro.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : astro.name.charAt(0)}
+                    {astro.astrologerProfile?.image ? <img src={astro.astrologerProfile.image} alt={astro.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (astro.name?.charAt(0) || 'A')}
                 </div>
                 <div className="astro-meta">
                     <h3 className="astro-name">{astro.name}</h3>

@@ -125,7 +125,8 @@ const AstrologerApplication = ({ onLogin }) => {
                     rate: formData.rate,
                     idNumber: formData.idNumber,
                     upiId: formData.upiId,
-                    certification: formData.certification
+                    certification: formData.certification,
+                    submitApplication: true
                 })
             });
 

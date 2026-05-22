@@ -31,9 +31,9 @@ const Navbar = ({ user, onLogout }) => {
     /* ── Authenticated ── */
     if (user) {
         const fullName = user.name || (user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : null) || user.email || user.phone || 'User';
-        const initials = fullName.charAt(0).toUpperCase();
+        const initials = fullName?.charAt(0)?.toUpperCase() || 'U';
         const displayName = user.firstName || user.name || (user.email ? user.email.split('@')[0] : 'User');
-        const roleLabel = user.role.charAt(0) + user.role.slice(1).toLowerCase();
+        const roleLabel = user.role ? (user.role.charAt(0) + user.role.slice(1).toLowerCase()) : 'User';
 
 
         return (
