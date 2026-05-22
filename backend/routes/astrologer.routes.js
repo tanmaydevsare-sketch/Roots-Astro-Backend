@@ -243,9 +243,13 @@ router.get('/admin/pending', authMiddleware, roleMiddleware(['ADMIN']), async (r
  */
 router.patch('/admin/approve/:id', authMiddleware, roleMiddleware(['ADMIN']), async (req, res) => {
     try {
-        await prisma.astrologerProfile.update({
+        const profile = await prisma.astrologerProfile.update({
             where: { id: parseInt(req.params.id) },
             data: { status: 'APPROVED' }
+        });
+        await prisma.user.update({
+            where: { id: profile.userId },
+            data: { status: 'active' }
         });
         res.json({ message: 'Astrologer approved successfully' });
     } catch (error) {
@@ -264,9 +268,13 @@ router.patch('/admin/approve/:id', authMiddleware, roleMiddleware(['ADMIN']), as
  */
 router.patch('/admin/reject/:id', authMiddleware, roleMiddleware(['ADMIN']), async (req, res) => {
     try {
-        await prisma.astrologerProfile.update({
+        const profile = await prisma.astrologerProfile.update({
             where: { id: parseInt(req.params.id) },
             data: { status: 'REJECTED' }
+        });
+        await prisma.user.update({
+            where: { id: profile.userId },
+            data: { status: 'suspended' }
         });
         res.json({ message: 'Astrologer rejected' });
     } catch (error) {
