@@ -9,11 +9,6 @@ import {
 } from 'lucide-react';
 import API_URL from '../api/config';
 import { StatCard, StatusBadge, Modal, DashboardLayout, SidebarBtn, FormField, AstrologerCard, EmptyState } from '../components/Shared';
-import {
-    ALL_USERS, PENDING_ASTROLOGERS, PLATFORM_STATS, ASTROLOGER_BOOKINGS,
-    ADMIN_FINANCE, PAYMENT_CONFIG as INIT_PAYMENT_CONFIG, PLATFORM_CONFIG, PLATFORM_SERVICES,
-    ASTROLOGERS
-} from '../data/mockData';
 
 const AdminDashboard = ({ user }) => {
     const { currencySymbol, refreshSettings } = useSettings();
@@ -27,13 +22,13 @@ const AdminDashboard = ({ user }) => {
     const [smsSending, setSmsSending] = useState(false);
     const [smsSent, setSmsSent] = useState(false);
     const setTab = (t) => setSearchParams({ tab: t });
-    const [users, setUsers] = useState(ALL_USERS);
+    const [users, setUsers] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [userRoleFilter, setUserRoleFilter] = useState('all');
     const [userStatusFilter, setUserStatusFilter] = useState('all');
     const [serviceFilter, setServiceFilter] = useState('all');
     const [viewMode, setViewMode] = useState('grid');
-    const [pendingAstros, setPendingAstros] = useState(PENDING_ASTROLOGERS);
+    const [pendingAstros, setPendingAstros] = useState([]);
     const [approvedAstros, setApprovedAstros] = useState([]);
     const [rejectedAstros, setRejectedAstros] = useState([]);
     const [viewAstro, setViewAstro] = useState(null);
@@ -236,23 +231,24 @@ const AdminDashboard = ({ user }) => {
 
     // ── Admin Withdrawal ──
     const [adminFinance, setAdminFinance] = useState({
-        ...ADMIN_FINANCE,
-        withdrawalHistory: [
-            { id: 1, amount: 2562.50, date: 'Mar 28, 2026', method: 'Razorpay Payout', status: 'completed', ref: 'WDRL-RZ-882' },
-            { id: 2, amount: 1500.00, date: 'Mar 15, 2026', method: 'PayPal Settlement', status: 'completed', ref: 'WDRL-PP-421' },
-            { id: 3, amount: 3200.00, date: 'Feb 28, 2026', method: 'Bank Transfer', status: 'completed', ref: 'WDRL-BK-091' },
-            { id: 4, amount: 950.00,  date: 'Feb 10, 2026', method: 'Razorpay Payout', status: 'completed', ref: 'WDRL-RZ-112' },
-            { id: 5, amount: 4100.00, date: 'Jan 25, 2026', method: 'Manual Settlement', status: 'completed', ref: 'WDRL-MN-004' }
-        ]
+        totalVolume: 0,
+        platformShare: 0,
+        availableBalance: 0,
+        pendingSettlement: 0,
+        bankDetails: { accountName: '', accountNumber: '', ifsc: '', bankName: '', swift: '' },
+        withdrawalHistory: [],
+        pendingWithdrawals: [],
+        recentTransactions: [],
+        auditLogs: []
     });
-    const [bankDetails, setBankDetails] = useState(ADMIN_FINANCE.bankDetails);
+    const [bankDetails, setBankDetails] = useState({ accountName: '', accountNumber: '', ifsc: '', bankName: '', swift: '' });
     const [withdrawAmount, setWithdrawAmount] = useState('');
     const [withdrawModal, setWithdrawModal] = useState(false);
     const [withdrawProcessing, setWithdrawProcessing] = useState(false);
     const [withdrawSuccess, setWithdrawSuccess] = useState(false);
     const [expandedConfig, setExpandedConfig] = useState('razorpay'); // State for which PG config is open
     const [bankSaved, setBankSaved] = useState(false);
-    const [allBookings, setAllBookings] = useState(ASTROLOGER_BOOKINGS); // Default to mock, fetch real later
+    const [allBookings, setAllBookings] = useState([]); // Default to clean array, fetch real later
     const [bookingActionLoading, setBookingActionLoading] = useState(null);
     const [allAstros, setAllAstros] = useState([]);
     
@@ -702,7 +698,7 @@ const AdminDashboard = ({ user }) => {
         </>
     );
 
-    const filteredAstros = (allAstros.length > 0 ? allAstros : ASTROLOGERS).filter(a => {
+    const filteredAstros = allAstros.filter(a => {
         const name = a.name || `${a.user?.firstName} ${a.user?.lastName}` || 'User';
         const matchesSearch = name.toLowerCase().includes(searchQuery.toLowerCase()) ||
             (a.expertise && Array.isArray(a.expertise) && a.expertise.some(e => e.toLowerCase().includes(searchQuery.toLowerCase())));
@@ -736,12 +732,18 @@ const AdminDashboard = ({ user }) => {
 
                     <div className="filter-shelf mb-lg">
                         <button className={`filter-tag ${serviceFilter === 'all' ? 'active' : ''}`} onClick={() => setServiceFilter('all')}>All Services</button>
-                        {(Array.isArray(PLATFORM_SERVICES) ? [...new Set(PLATFORM_SERVICES.map(s => s.category))] : []).map(cat => (
-                            <button key={cat} className={`filter-tag ${serviceFilter === cat ? 'active' : ''}`} onClick={() => setServiceFilter(cat)}>{cat}</button>
+                        {categories.map(cat => (
+                            <button key={cat.id} className={`filter-tag ${serviceFilter === cat.name ? 'active' : ''}`} onClick={() => setServiceFilter(cat.name)}>{cat.name}</button>
                         ))}
                     </div>
 
-                    {viewMode === 'grid' ? (
+                    {filteredAstros.length === 0 ? (
+                        <EmptyState 
+                            icon={<Users size={40} />} 
+                            title="No Experts Registered" 
+                            description="There are currently no active expert astrologers in the database." 
+                        />
+                    ) : viewMode === 'grid' ? (
                         <div className="astro-grid">
                             {filteredAstros.map(astro => (
                                 <AstrologerCard 

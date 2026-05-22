@@ -230,6 +230,26 @@ router.post('/firebase-login', async (req, res) => {
 
       // Create Wallet for every new user
       await prisma.wallet.create({ data: { userId: user.id, balance: 0 } });
+    } else {
+      // User already exists. If role is 'ASTROLOGER' and they are currently a 'CLIENT',
+      // upgrade them to 'ASTROLOGER' to allow expert onboarding, and set status to 'PENDING'.
+      if (role === 'ASTROLOGER' && user.role === 'CLIENT') {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            role: 'ASTROLOGER',
+            status: 'PENDING'
+          }
+        });
+      }
+      
+      // Ensure AstrologerProfile exists if role is ASTROLOGER
+      if (user.role === 'ASTROLOGER') {
+        const profile = await prisma.astrologerProfile.findUnique({ where: { userId: user.id } });
+        if (!profile) {
+          await prisma.astrologerProfile.create({ data: { userId: user.id } });
+        }
+      }
     }
 
     // 3. Issue our own JWT

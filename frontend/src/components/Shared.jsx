@@ -1,6 +1,5 @@
 import React from 'react';
 import { X, CheckCircle, ArrowRight, Star, Globe, Check, Shield, AlertCircle, CreditCard, Zap } from 'lucide-react';
-import { PLATFORM_CONFIG } from '../data/mockData';
 import { useSettings } from '../context/SettingsContext';
 
 /* ─── Modal ─── */
@@ -102,7 +101,7 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, activeGateway 
     const [paymentDone, setPaymentDone] = React.useState(false);
     const [paymentRef, setPaymentRef] = React.useState('');
 
-    const commissionRate = PLATFORM_CONFIG.commissionRate;
+    const commissionRate = 0.25;
 
     const services = astro?.astrologerProfile?.services?.length > 0
         ? astro.astrologerProfile.services.map(s => ({

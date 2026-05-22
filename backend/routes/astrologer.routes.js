@@ -166,6 +166,10 @@ router.patch('/profile/update', authMiddleware, roleMiddleware(['ASTROLOGER']), 
             profileData.certification = certifications;
         }
 
+        if (rate !== undefined) {
+            profileData.rate = rate;
+        }
+
         // Clean up any extra fields that might not exist on the schema
         delete profileData.id;
         delete profileData.userId;

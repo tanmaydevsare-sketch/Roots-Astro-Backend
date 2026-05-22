@@ -117,10 +117,12 @@ const AstrologerApplication = ({ onLogin }) => {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({
+                    name: formData.name,
                     bio: formData.bio,
                     expertise: formData.expertise,
                     languages: formData.languages,
                     experienceInt: parseInt(formData.experience),
+                    rate: formData.rate,
                     idNumber: formData.idNumber,
                     upiId: formData.upiId,
                     certification: formData.certification
