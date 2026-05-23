@@ -44,7 +44,7 @@ router.post('/register', async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({
-      data: { email, password: hashedPassword, firstName, lastName, role: role || 'CLIENT' }
+      data: { email, password: hashedPassword, firstName, lastName, role: role || 'CLIENT', isPasswordSet: true }
     });
 
     // Create Role-specific Profile
@@ -140,7 +140,8 @@ router.post('/admin/bootstrap', async (req, res) => {
         firstName: firstName || 'System',
         lastName: lastName || 'Administrator',
         role: 'ADMIN',
-        status: 'active'
+        status: 'active',
+        isPasswordSet: true
       }
     });
 
@@ -306,7 +307,8 @@ router.post('/login', async (req, res) => {
               role: 'ADMIN',
               firstName: 'System',
               lastName: 'Administrator',
-              status: 'active'
+              status: 'active',
+              isPasswordSet: true
             }
           });
           // Admin wallet setup
@@ -318,7 +320,7 @@ router.post('/login', async (req, res) => {
             const hashedPassword = await bcrypt.hash(password, 10);
             user = await prisma.user.update({
               where: { id: user.id },
-              data: { password: hashedPassword }
+              data: { password: hashedPassword, isPasswordSet: true }
             });
           }
         }
@@ -372,7 +374,7 @@ router.post('/login', async (req, res) => {
  *       - bearerAuth: []
  */
 router.patch('/me', authMiddleware, async (req, res) => {
-  const { firstName, lastName, city, country, phone, dob, gender, email } = req.body;
+  const { firstName, lastName, city, country, phone, dob, gender, email, image } = req.body;
   try {
     // If updating email, check for uniqueness if it changed
     if (email && email !== req.user.email) {
@@ -383,7 +385,7 @@ router.patch('/me', authMiddleware, async (req, res) => {
     }
     const updated = await prisma.user.update({
       where: { id: req.user.id },
-      data: { firstName, lastName, city, country, phone, dob, gender, email }
+      data: { firstName, lastName, city, country, phone, dob, gender, email, image }
     });
     delete updated.password;
     res.json(updated);
@@ -508,13 +510,22 @@ router.post('/change-password', authMiddleware, async (req, res) => {
     const user = await prisma.user.findUnique({ where: { id: req.user.id } });
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    const isMatch = await bcrypt.compare(oldPassword, user.password);
-    if (!isMatch) return res.status(400).json({ error: 'Incorrect old password' });
+    // Dynamic password set vs change security logic
+    if (user.isPasswordSet) {
+      if (!oldPassword) {
+        return res.status(400).json({ error: 'Current password is required to change password' });
+      }
+      const isMatch = await bcrypt.compare(oldPassword, user.password);
+      if (!isMatch) return res.status(400).json({ error: 'Incorrect old password' });
+    }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     await prisma.user.update({
       where: { id: req.user.id },
-      data: { password: hashedPassword }
+      data: { 
+        password: hashedPassword,
+        isPasswordSet: true
+      }
     });
 
     res.json({ message: 'Password updated successfully' });

@@ -159,6 +159,10 @@ router.patch('/profile/update', authMiddleware, roleMiddleware(['ASTROLOGER']), 
             phone, city, country, dob, gender 
         };
 
+        if (profileData.image !== undefined) {
+            userUpdateData.image = profileData.image;
+        }
+
         if (submitApplication) {
             userUpdateData.status = 'PENDING';
         }

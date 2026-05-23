@@ -68,7 +68,9 @@ const Navbar = ({ user, onLogout }) => {
 
 
                         <button className="profile-trigger" onClick={() => setProfileOpen(o => !o)} aria-haspopup="true" aria-expanded={profileOpen}>
-                            <div className="profile-avatar">{initials}</div>
+                            <div className="profile-avatar" style={{ overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                {user.image ? <img src={user.image} alt={fullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initials}
+                            </div>
                             <div className="profile-trigger-info">
                                 <span className="profile-name">{displayName}</span>
                                 <span className="profile-role">{roleLabel}</span>
@@ -84,7 +86,9 @@ const Navbar = ({ user, onLogout }) => {
                                     </button>
                                 </div>
                                 <div className="profile-dropdown-header">
-                                    <div className="profile-avatar profile-avatar-lg">{initials}</div>
+                                    <div className="profile-avatar profile-avatar-lg" style={{ overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        {user.image ? <img src={user.image} alt={fullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initials}
+                                    </div>
                                     <div style={{ minWidth: 0 }}>
                                         <p className="profile-dropdown-name">{fullName}</p>
                                         <p className="profile-dropdown-email">{user.email || user.phone}</p>

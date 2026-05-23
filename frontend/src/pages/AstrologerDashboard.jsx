@@ -247,7 +247,9 @@ const AstrologerDashboard = ({ user, onUserUpdate }) => {
                         languages: data.languages || '',
                         certifications: data.certification || '',
                         rate: data.rate || '50',
-                        image: data.image || ''
+                        image: data.image || '',
+                        rating: data.rating || 5.0,
+                        isPasswordSet: data.user?.isPasswordSet || false
                     });
                 }
             } catch (err) { console.error("Fetch profile failed", err); }
@@ -277,6 +279,9 @@ const AstrologerDashboard = ({ user, onUserUpdate }) => {
                 });
                 if (res.ok) {
                     setProfile(prev => ({ ...prev, image: base64 }));
+                    if (onUserUpdate) {
+                        onUserUpdate({ image: base64 });
+                    }
                 }
             } catch (err) { console.error("Image upload failed", err); }
             setImageLoading(false);
@@ -398,7 +403,7 @@ const AstrologerDashboard = ({ user, onUserUpdate }) => {
 
     const upcoming = bookings.filter(b => b.status === 'upcoming');
     const filteredBookings = bookings.filter(b => bookingFilter === 'all' || b.status === bookingFilter);
-    const totalEarned = earnings.filter(e => e.type === 'credit').reduce((s, e) => s + parseFloat(e.amount.replace(/[^0-9.-]+/g, '')), 0);
+    const totalEarned = (finance.withdrawnTotal + finance.withdrawableBalance + finance.pendingBalance).toFixed(2);
     const astrologerPct = (PLATFORM_CONFIG.astrologerShare * 100).toFixed(0);
     const platformPct = (PLATFORM_CONFIG.commissionRate * 100).toFixed(0);
 
@@ -454,6 +459,8 @@ const AstrologerDashboard = ({ user, onUserUpdate }) => {
                 { id: 'bookings', icon: <Calendar size={19} />, label: 'Appointments' },
                 { id: 'services', icon: <Star size={19} />, label: 'Services' },
                 { id: 'schedule', icon: <Clock size={19} />, label: 'Schedule' },
+                { id: 'earnings', icon: <Wallet size={19} />, label: 'Earnings' },
+                { id: 'settings', icon: <Settings size={19} />, label: 'Settings' }
             ].map(item => <SidebarBtn key={item.id} {...item} active={tab === item.id} onClick={(id) => setTab(id)} />)}
         </>
     );
@@ -544,11 +551,13 @@ const AstrologerDashboard = ({ user, onUserUpdate }) => {
             </Modal>
 
             {/* ── Change Password Modal ── */}
-            <Modal isOpen={passwordModal} onClose={() => { setPasswordModal(false); setPasswordError(''); setPasswordSuccess(false); }} title="Change Password" width="440px">
+            <Modal isOpen={passwordModal} onClose={() => { setPasswordModal(false); setPasswordError(''); setPasswordSuccess(false); }} title={profile.isPasswordSet ? "Change Password" : "Set Account Password"} width="440px">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                    <FormField label="Current Password">
-                        <input className="form-input" type="password" value={passwordForm.oldPassword} onChange={e => setPasswordForm({ ...passwordForm, oldPassword: e.target.value })} />
-                    </FormField>
+                    {profile.isPasswordSet && (
+                        <FormField label="Current Password">
+                            <input className="form-input" type="password" value={passwordForm.oldPassword} onChange={e => setPasswordForm({ ...passwordForm, oldPassword: e.target.value })} />
+                        </FormField>
+                    )}
                     <FormField label="New Password">
                         <input className="form-input" type="password" value={passwordForm.newPassword} onChange={e => setPasswordForm({ ...passwordForm, newPassword: e.target.value })} />
                     </FormField>
@@ -572,12 +581,13 @@ const AstrologerDashboard = ({ user, onUserUpdate }) => {
                                 const res = await fetch(`${API_URL}/api/auth/change-password`, {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                                    body: JSON.stringify({ oldPassword: passwordForm.oldPassword, newPassword: passwordForm.newPassword })
+                                    body: JSON.stringify({ oldPassword: profile.isPasswordSet ? passwordForm.oldPassword : '', newPassword: passwordForm.newPassword })
                                 });
                                 const data = await res.json();
                                 if (res.ok) {
                                     setPasswordSuccess(true);
                                     setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
+                                    setProfile(prev => ({ ...prev, isPasswordSet: true }));
                                     setTimeout(() => { setPasswordModal(false); setPasswordSuccess(false); }, 2000);
                                 } else {
                                     setPasswordError(data.error || "Update failed");
@@ -585,7 +595,7 @@ const AstrologerDashboard = ({ user, onUserUpdate }) => {
                             } catch (err) { setPasswordError("Could not connect to server"); }
                             setPasswordLoading(false);
                         }} disabled={passwordLoading}>
-                            {passwordLoading ? 'Updating...' : 'Update Password'}
+                            {profile.isPasswordSet ? (passwordLoading ? 'Updating...' : 'Update Password') : (passwordLoading ? 'Setting...' : 'Set Password')}
                         </button>
                     </div>
                 </div>
@@ -715,7 +725,7 @@ const AstrologerDashboard = ({ user, onUserUpdate }) => {
                     <div className="stat-grid">
                         <StatCard icon={<Calendar size={22} />} label="Appointments" value={bookings.length} sub={`${upcoming.length} upcoming`} accent="gold" />
                         <StatCard icon={<CreditCard size={22} />} label="Your Earnings" value={`${currencySymbol}${totalEarned}`} sub={`${astrologerPct}% share`} accent="green" />
-                        <StatCard icon={<Star size={22} />} label="Avg Rating" value="4.9 / 5" sub="312 reviews" accent="purple" />
+                        <StatCard icon={<Star size={22} />} label="Avg Rating" value={`${profile.rating || '5.0'} / 5`} sub="Verified Expert" accent="purple" />
                         <StatCard icon={<Clock size={22} />} label="Active Days/Week" value={Object.values(weeklySchedule).filter(d => d.available).length} sub="Set in Schedule" accent="gold" />
                     </div>
                     <div className="upcoming-appointments-section" style={{ marginBottom: '2.5rem' }}>
@@ -1439,9 +1449,9 @@ const AstrologerDashboard = ({ user, onUserUpdate }) => {
                     </div>
 
                     <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
-                        <div style={{ textAlign: 'center' }}><p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>This Month</p><h2 style={{ margin: '0.3rem 0' }}>{currencySymbol}1,240</h2><span style={{ color: '#1cc88a', fontSize: '0.75rem' }}>↑ 12% vs last mo</span></div>
-                        <div style={{ textAlign: 'center' }}><p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>Sessions</p><h2 style={{ margin: '0.3rem 0' }}>42</h2><span style={{ color: '#1cc88a', fontSize: '0.75rem' }}>38 completed</span></div>
-                        <div style={{ textAlign: 'center' }}><p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>Avg Ticket</p><h2 style={{ margin: '0.3rem 0' }}>{currencySymbol}32.50</h2><span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>per session</span></div>
+                        <div style={{ textAlign: 'center' }}><p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>Active Funds</p><h2 style={{ margin: '0.3rem 0' }}>{currencySymbol}{(finance.withdrawableBalance + finance.pendingBalance).toFixed(2)}</h2><span style={{ color: '#1cc88a', fontSize: '0.75rem' }}>Dynamic Balance</span></div>
+                        <div style={{ textAlign: 'center' }}><p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>Sessions</p><h2 style={{ margin: '0.3rem 0' }}>{bookings.length}</h2><span style={{ color: '#1cc88a', fontSize: '0.75rem' }}>{bookings.filter(b => b.status === 'completed').length} completed</span></div>
+                        <div style={{ textAlign: 'center' }}><p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>Avg Ticket</p><h2 style={{ margin: '0.3rem 0' }}>{currencySymbol}{bookings.length > 0 ? (bookings.reduce((sum, b) => sum + Number(b.amount || 0), 0) / bookings.length).toFixed(2) : '0.00'}</h2><span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>per session</span></div>
                     </div>
 
                     {/* Session Breakdown in Table */}

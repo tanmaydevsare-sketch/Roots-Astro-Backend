@@ -77,7 +77,7 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [addFunds, setAddFunds] = useState('');
-    const [profile, setProfile] = useState({ firstName: user?.firstName || '', lastName: user?.lastName || '', email: user?.email || '', phone: user?.phone || '', dob: user?.dob || '', gender: user?.gender || '', city: user?.city || '', country: user?.country || '' });
+     const [profile, setProfile] = useState({ firstName: user?.firstName || '', lastName: user?.lastName || '', email: user?.email || '', phone: user?.phone || '', dob: user?.dob || '', gender: user?.gender || '', city: user?.city || '', country: user?.country || '', image: user?.image || '', isPasswordSet: user?.isPasswordSet || false });
     const [profileSaved, setProfileSaved] = useState(false);
     const [profileError, setProfileError] = useState('');
     const [profileLoading, setProfileLoading] = useState(false);
@@ -107,7 +107,9 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
                 dob: data.dob || '',
                 gender: data.gender || '',
                 city: data.city || '',
-                country: data.country || ''
+                country: data.country || '',
+                image: data.image || '',
+                isPasswordSet: data.isPasswordSet || false
             }))
             .catch(err => console.error("Profile fetch fail", err));
 
@@ -379,6 +381,35 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
         setProfileLoading(false);
     };
 
+    const [imageLoading, setImageLoading] = useState(false);
+
+    const handleImageUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = async () => {
+            const base64 = reader.result;
+            setImageLoading(true);
+            const token = localStorage.getItem('token');
+            try {
+                const res = await fetch(`${API_URL}/api/auth/me`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ image: base64 })
+                });
+                if (res.ok) {
+                    setProfile(prev => ({ ...prev, image: base64 }));
+                    if (onUserUpdate) {
+                        onUserUpdate({ image: base64 });
+                    }
+                }
+            } catch (err) { console.error("Image upload failed", err); }
+            setImageLoading(false);
+        };
+    };
+
     const filteredAstros = astrologers.filter(a => {
         const matchesSearch = a.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
             a.expertise.some(e => e.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -404,11 +435,13 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
         <DashboardLayout sidebar={sidebar}>
             <BookingModal astro={bookingTarget} isOpen={bookingOpen} onClose={() => setBookingOpen(false)} onConfirm={handleConfirmBooking} walletBalance={walletBalance} />
 
-            <Modal isOpen={passwordModal} onClose={() => { setPasswordModal(false); setPasswordError(''); setPasswordSuccess(false); }} title="Change Password" width="440px">
+            <Modal isOpen={passwordModal} onClose={() => { setPasswordModal(false); setPasswordError(''); setPasswordSuccess(false); }} title={profile.isPasswordSet ? "Change Password" : "Set Account Password"} width="440px">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                    <FormField label="Current Password">
-                        <input className="form-input" type="password" value={passwordForm.oldPassword} onChange={e => setPasswordForm({ ...passwordForm, oldPassword: e.target.value })} />
-                    </FormField>
+                    {profile.isPasswordSet && (
+                        <FormField label="Current Password">
+                            <input className="form-input" type="password" value={passwordForm.oldPassword} onChange={e => setPasswordForm({ ...passwordForm, oldPassword: e.target.value })} />
+                        </FormField>
+                    )}
                     <FormField label="New Password">
                         <input className="form-input" type="password" value={passwordForm.newPassword} onChange={e => setPasswordForm({ ...passwordForm, newPassword: e.target.value })} />
                     </FormField>
@@ -432,12 +465,13 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
                                 const res = await fetch(`${API_URL}/api/auth/change-password`, {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                                    body: JSON.stringify({ oldPassword: passwordForm.oldPassword, newPassword: passwordForm.newPassword })
+                                    body: JSON.stringify({ oldPassword: profile.isPasswordSet ? passwordForm.oldPassword : '', newPassword: passwordForm.newPassword })
                                 });
                                 const data = await res.json();
                                 if (res.ok) {
                                     setPasswordSuccess(true);
                                     setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
+                                    setProfile(prev => ({ ...prev, isPasswordSet: true }));
                                     setTimeout(() => { setPasswordModal(false); setPasswordSuccess(false); }, 2000);
                                 } else {
                                     setPasswordError(data.error || "Update failed");
@@ -445,7 +479,7 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
                             } catch (err) { setPasswordError("Could not connect to server"); }
                             setPasswordLoading(false);
                         }} disabled={passwordLoading}>
-                            {passwordLoading ? 'Updating...' : 'Update Password'}
+                            {profile.isPasswordSet ? (passwordLoading ? 'Updating...' : 'Update Password') : (passwordLoading ? 'Setting...' : 'Set Password')}
                         </button>
                     </div>
                 </div>
@@ -1022,6 +1056,21 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
                     <h2 className="dash-title">Profile Settings</h2>
                     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.5fr) minmax(0, 1fr)', gap: '2rem' }}>
                         <div className="glass-card">
+                            <div style={{ marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: '1.5rem', borderBottom: '1px solid var(--glass-border)', paddingBottom: '1.5rem' }}>
+                                <div className="profile-avatar-xl" style={{ width: 80, height: 80, fontSize: '2rem', overflow: 'hidden', position: 'relative', borderRadius: '50%', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--glass-border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    {profile.image ? <img src={profile.image} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (profile.firstName?.charAt(0) || 'U')}
+                                    {imageLoading && <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem' }}>...</div>}
+                                </div>
+                                <div>
+                                    <h4 style={{ margin: '0 0 0.5rem 0' }}>Profile Photo</h4>
+                                    <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>Update your photo for a personalized experience.</p>
+                                    <label className="btn btn-outline btn-sm" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        <User size={14} /> {profile.image ? 'Change Photo' : 'Upload Photo'}
+                                        <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageUpload} />
+                                    </label>
+                                </div>
+                            </div>
+
                             <h3 style={{ marginBottom: '1.5rem' }}>Personal Information</h3>
                             <div className="profile-edit-grid">
                                 <FormField label="First Name"><input className="form-input" value={profile.firstName} onChange={e => setProfile({ ...profile, firstName: e.target.value })} /></FormField>
@@ -1045,7 +1094,9 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                             <div className="glass-card">
                                 <h3 style={{ marginBottom: '1.25rem' }}>Security</h3>
-                                <button className="btn btn-outline btn-block mb-md" onClick={() => setPasswordModal(true)}>Change Account Password</button>
+                                <button className="btn btn-outline btn-block mb-md" onClick={() => setPasswordModal(true)}>
+                                    {profile.isPasswordSet ? "Change Account Password" : "Set Account Password"}
+                                </button>
                                 <div style={{ borderTop: '1px solid var(--glass-border)', paddingTop: '1.25rem' }}>
                                     <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>Two-factor authentication is currently <strong>disabled</strong>.</p>
                                     <button className="btn btn-ghost btn-sm">Enable 2FA</button>

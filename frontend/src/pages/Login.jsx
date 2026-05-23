@@ -77,13 +77,16 @@ const Login = ({ onLogin, portal = 'CLIENT' }) => {
                 const res = await fetch(`${API_URL}/api/auth/firebase-login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ idToken, role: 'CLIENT' })
+                    body: JSON.stringify({ idToken, role: portal })
                 });
                 const data = await res.json();
                 if (res.ok) {
+                    if (portal === 'ASTROLOGER' && data.user.role !== 'ASTROLOGER') {
+                        return setError('No astrologer account found for this mobile number. Please register first.');
+                    }
                     localStorage.setItem('token', data.token);
                     onLogin(data.user);
-                    navigate('/client');
+                    navigate(PORTALS[portal].redirect);
                 } else setError(data.error || 'Verification failed on backend.');
             } catch (err) { 
                 console.error(err);
@@ -178,7 +181,7 @@ const Login = ({ onLogin, portal = 'CLIENT' }) => {
                         {portal === 'CLIENT' ? 'Experience professional astrology at your fingertips.' : 'Secure, role-based platform access.'}
                     </p>
 
-                    {portal === 'CLIENT' && (
+                    {(portal === 'CLIENT' || portal === 'ASTROLOGER') && (
                         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', marginTop: '1rem', padding: '0.3rem', background: 'rgba(0,0,0,0.1)', borderRadius: '10px' }}>
                             <button 
                                 onClick={() => setLoginMethod('mobile')}
@@ -190,12 +193,12 @@ const Login = ({ onLogin, portal = 'CLIENT' }) => {
                                 onClick={() => setLoginMethod('email')}
                                 style={{ flex: 1, padding: '0.5rem', borderRadius: '8px', border: 'none', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', background: loginMethod === 'email' ? 'var(--gold-gradient)' : 'transparent', color: loginMethod === 'email' ? '#1A1102' : 'var(--text-muted)', transition: '0.3s' }}
                             >
-                                <Lock size={12} style={{ marginRight: '0.4rem' }} /> Email Login
+                                <Lock size={12} style={{ marginRight: '0.4rem' }} /> Email & Pass
                             </button>
                         </div>
                     )}
 
-                    {portal === 'CLIENT' && loginMethod === 'mobile' ? (
+                    {(portal === 'CLIENT' || portal === 'ASTROLOGER') && loginMethod === 'mobile' ? (
                         <form onSubmit={handleClientLogin} style={{ marginTop: '0.5rem' }}>
                             {step === 'input' ? (
                                 <>
@@ -225,7 +228,7 @@ const Login = ({ onLogin, portal = 'CLIENT' }) => {
                             )}
                         </form>
                     ) : (
-                        <form onSubmit={handleStaffLogin} style={{ marginTop: portal === 'CLIENT' ? '0.5rem' : '2rem' }}>
+                        <form onSubmit={handleStaffLogin} style={{ marginTop: (portal === 'CLIENT' || portal === 'ASTROLOGER') ? '0.5rem' : '2rem' }}>
                             <div className="form-group">
                                 <label className="form-label">Work Email</label>
                                 <input className="form-input" type="email" value={email} onChange={e => setEmail(e.target.value)} required autoComplete="off" />
