@@ -59,7 +59,7 @@ function App() {
   };
 
   const getDashLink = (role) => {
-    return { CLIENT: '/client', ASTROLOGER: '/astrologer', WRITER: '/writer', ADMIN: '/admin' }[role] || '/';
+    return { CLIENT: '/client', ASTROLOGER: '/astrologer', WRITER: '/writer', ADMIN: '/admin', SUPERADMIN: '/admin' }[role] || '/';
   };
 
   return (

@@ -48,7 +48,8 @@ const AdminDashboard = ({ user }) => {
 
     const checkAuthError = (res) => {
         if (res.status === 401 || res.status === 403) {
-            console.warn("Session expired or unauthorized. Logging out...");
+            console.error(`[AUTH ERROR] Request to ${res.url} failed with status ${res.status}`);
+            alert(`Session Authorization Failed!\n\nRequest: ${res.url.replace(API_URL, '')}\nStatus: ${res.status} (${res.statusText || 'Unauthorized'})\n\nLogging out...`);
             localStorage.removeItem('token');
             localStorage.removeItem('rootsastro_user');
             window.location.reload();

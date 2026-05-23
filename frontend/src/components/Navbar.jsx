@@ -16,7 +16,7 @@ const Navbar = ({ user, onLogout }) => {
 
     const dashLink = () => {
         if (!user) return '/';
-        return { CLIENT: '/client', ASTROLOGER: '/astrologer', WRITER: '/writer', ADMIN: '/admin' }[user.role] || '/';
+        return { CLIENT: '/client', ASTROLOGER: '/astrologer', WRITER: '/writer', ADMIN: '/admin', SUPERADMIN: '/admin' }[user.role] || '/';
     };
 
     useEffect(() => {
