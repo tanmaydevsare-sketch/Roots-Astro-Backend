@@ -428,7 +428,8 @@ const AdminDashboard = ({ user }) => {
         const token = localStorage.getItem('token');
         if (!token) return;
         try {
-            const res = await fetch(`${API_URL}/api/settings/admin/gateways`, {
+            const res = await fetch(`${API_URL}/api/settings/admin/gateways?t=${Date.now()}`, {
+                cache: 'no-store',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (checkAuthError(res)) return;

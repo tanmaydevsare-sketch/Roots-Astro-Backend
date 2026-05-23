@@ -35,7 +35,9 @@ export const SettingsProvider = ({ children }) => {
 
     const fetchSettings = async () => {
         try {
-            const res = await fetch(`${API_URL}/api/settings/public/global`);
+            const res = await fetch(`${API_URL}/api/settings/public/global?t=${Date.now()}`, {
+                cache: 'no-store'
+            });
             if (res.ok) {
                 const data = await res.json();
                 if (data) {

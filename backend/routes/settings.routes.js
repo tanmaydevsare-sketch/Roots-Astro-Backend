@@ -12,6 +12,7 @@ const { authMiddleware, roleMiddleware } = require('../middleware/auth');
  */
 router.get('/public/global', async (req, res) => {
     try {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
         const settings = await prisma.globalSettings.findUnique({ where: { id: 1 } });
         // Strip sensitive data (keys/secrets) before returning public settings
         if (settings) {
@@ -105,12 +106,18 @@ router.patch('/admin/global', authMiddleware, roleMiddleware(['SUPERADMIN', 'ADM
         // Add super-only fields if user is SUPERADMIN
         const finalAllowedFields = isSuperAdmin ? [...allowedFields, ...superOnlyFields] : allowedFields;
 
+        console.log("DEBUG SETTINGS: user =", req.user);
+        console.log("DEBUG SETTINGS: isSuperAdmin =", isSuperAdmin);
+        console.log("DEBUG SETTINGS: finalAllowedFields includes razorpayKeyId =", finalAllowedFields.includes('razorpayKeyId'));
+
         const sanitizedData = {};
         finalAllowedFields.forEach(field => {
             if (req.body[field] !== undefined) {
                 sanitizedData[field] = req.body[field];
             }
         });
+
+        console.log("DEBUG SETTINGS: sanitizedData =", sanitizedData);
 
         // If not superadmin and trying to update super-only fields, ignore them (sanitized already)
         if (!isSuperAdmin) {
@@ -164,6 +171,7 @@ router.patch('/admin/bank', authMiddleware, roleMiddleware(['ADMIN']), async (re
  */
 router.get('/admin/gateways', authMiddleware, roleMiddleware(['ADMIN']), async (req, res) => {
     try {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
         const settings = await prisma.globalSettings.findUnique({ where: { id: 1 } });
         res.json(settings || { activeGateway: 'razorpay' });
     } catch (error) {
