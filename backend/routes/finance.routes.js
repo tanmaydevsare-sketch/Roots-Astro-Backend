@@ -271,7 +271,11 @@ router.post('/withdraw', authMiddleware, async (req, res) => {
 router.get('/admin/dashboard', authMiddleware, roleMiddleware(['ADMIN']), async (req, res) => {
     try {
         const totalRevenue = await prisma.booking.aggregate({
-            where: { status: 'completed' },
+            where: {
+                status: {
+                    in: ['COMPLETED', 'COMPLETED_BY_ADMIN', 'completed']
+                }
+            },
             _sum: { amount: true }
         });
 

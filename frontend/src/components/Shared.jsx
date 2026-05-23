@@ -90,7 +90,7 @@ export const AstrologerCard = ({ astro, onBook, hideRate = false }) => {
 
 /* ─── Booking Wizard (5 steps: Service → Date/Time → Problem → Pay → Receipt) ─── */
 export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance = 0 }) => {
-    const { currencySymbol } = useSettings();
+    const { currencySymbol, commissionRate = 0.25 } = useSettings();
     const [step, setStep] = React.useState(1);
     const [selectedService, setSelectedService] = React.useState('');
     const [selectedDate, setSelectedDate] = React.useState('');
@@ -100,8 +100,6 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance 
     const [paymentProcessing, setPaymentProcessing] = React.useState(false);
     const [paymentDone, setPaymentDone] = React.useState(false);
     const [paymentRef, setPaymentRef] = React.useState('');
-
-    const commissionRate = 0.25;
 
     const services = astro?.astrologerProfile?.services?.length > 0
         ? astro.astrologerProfile.services.map(s => ({

@@ -435,6 +435,7 @@ const AdminDashboard = ({ user }) => {
             if (res.ok) {
                 const data = await res.json();
                 setSettings({
+                    ...data,
                     maintenanceMode: data.maintenanceMode ?? false,
                     platformName: data.platformName || 'Roots Astro',
                     supportEmail: data.supportEmail || '',
@@ -474,6 +475,15 @@ const AdminDashboard = ({ user }) => {
                     storageAccessKey: data.storageAccessKey || '',
                     storageSecretKey: data.storageSecretKey || '',
                 });
+                
+                setBankDetails({
+                    accountName: '',
+                    accountNumber: data.adminAccountNo || '',
+                    ifsc: data.adminIfsc || '',
+                    bankName: data.adminBankName || '',
+                    swift: ''
+                });
+
                 if (data.activeGateway) {
                     setPgConfig(p => ({ 
                         ...p, 
@@ -615,6 +625,7 @@ const AdminDashboard = ({ user }) => {
                 }
 
                 refreshSettings();
+                fetchGlobalSettings();
                 if (type === 'pg') setPgSaved(true);
                 else if (type === 'bank') setBankSaved(true);
                 else setSettingsSaved(true);
@@ -1429,6 +1440,11 @@ const AdminDashboard = ({ user }) => {
                             <button className="btn btn-primary btn-sm btn-block" onClick={() => { saveGlobalSettings('all'); }}>
                                 <Save size={14} style={{ marginRight: '0.4rem' }} /> Update Master Config
                             </button>
+                            {settingsSaved && (
+                                <div style={{ color: '#1cc88a', fontWeight: 600, fontSize: '0.8rem', textAlign: 'center', marginTop: '0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem' }} className="fade-in">
+                                    <span>✓ Master configuration synchronized.</span>
+                                </div>
+                            )}
                         </div>
 
                         {/* 3. Transaction Audit Trail */}

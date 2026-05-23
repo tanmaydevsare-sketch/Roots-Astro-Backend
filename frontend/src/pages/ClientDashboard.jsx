@@ -58,7 +58,7 @@ const CosmicLoader = () => (
 );
 
 const ClientDashboard = ({ user, onUserUpdate }) => {
-    const { currencySymbol } = useSettings();
+    const { currencySymbol, commissionRate = 0.25 } = useSettings();
     const [searchParams, setSearchParams] = useSearchParams();
     const tab = searchParams.get('tab') || 'overview';
     const setTab = (t) => setSearchParams({ tab: t });
@@ -190,7 +190,7 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
             });
             if (res.ok) {
                 const data = await res.json();
-                const commissionRate = PLATFORM_CONFIG.commissionRate || 0.20;
+                const localCommissionRate = commissionRate;
                 setBookings((data || []).map(b => {
                     const scheduledDate = new Date(b.scheduledAt);
                     const dateFormatted = scheduledDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -206,8 +206,8 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
                         date: dateFormatted,
                         time: timeFormatted,
                         amount: amount,
-                        platformFee: +(amount * commissionRate).toFixed(2),
-                        astrologerReceives: +(amount * (1 - commissionRate)).toFixed(2),
+                        platformFee: +(amount * localCommissionRate).toFixed(2),
+                        astrologerReceives: +(amount * (1 - localCommissionRate)).toFixed(2),
                         zoomLink: b.zoomMeetingUrl,
                         raw: b
                     };

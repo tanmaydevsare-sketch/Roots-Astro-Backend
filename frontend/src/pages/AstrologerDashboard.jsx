@@ -93,7 +93,7 @@ const PreviewPanel = ({ previewDay, setPreviewDay, previewSlots, weeklySchedule,
 );
 
 const AstrologerDashboard = ({ user, onUserUpdate }) => {
-    const { currencySymbol } = useSettings();
+    const { currencySymbol, commissionRate = 0.25 } = useSettings();
     const [searchParams, setSearchParams] = useSearchParams();
     const tab = searchParams.get('tab') || 'overview';
     const setTab = (t) => setSearchParams({ tab: t });
@@ -243,7 +243,7 @@ const AstrologerDashboard = ({ user, onUserUpdate }) => {
                         time: new Date(b.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                         status: b.status.toLowerCase(),
                         amount: b.amount,
-                        astrologerReceives: (b.amount * (1 - (PLATFORM_CONFIG.commissionRate))).toFixed(2)
+                        astrologerReceives: (b.amount * (1 - commissionRate)).toFixed(2)
                     })));
                 }
             } catch (err) {
@@ -479,8 +479,8 @@ const AstrologerDashboard = ({ user, onUserUpdate }) => {
     const upcoming = bookings.filter(b => b.status === 'upcoming');
     const filteredBookings = bookings.filter(b => bookingFilter === 'all' || b.status === bookingFilter);
     const totalEarned = (finance.withdrawnTotal + finance.withdrawableBalance + finance.pendingBalance).toFixed(2);
-    const astrologerPct = (PLATFORM_CONFIG.astrologerShare * 100).toFixed(0);
-    const platformPct = (PLATFORM_CONFIG.commissionRate * 100).toFixed(0);
+    const astrologerPct = ((1 - commissionRate) * 100).toFixed(0);
+    const platformPct = (commissionRate * 100).toFixed(0);
 
     // Preview slots for selected day
     const previewSlots = computeSlots(weeklySchedule[previewDay], schedConfig.buffer, services.find(s => s.active));
@@ -1201,7 +1201,7 @@ const AstrologerDashboard = ({ user, onUserUpdate }) => {
                                                 value={serviceSchedule[s.id]?.maxPerWeek || '10'}
                                                 onChange={e => setServiceSchedule(prev => ({ ...prev, [s.id]: { ...prev[s.id], maxPerWeek: e.target.value } }))} />
                                         </td>
-                                        <td data-label={`You Receive (${astrologerPct}%)`} style={{ color: '#1cc88a', fontWeight: 600 }}>{currencySymbol}{(s.price * PLATFORM_CONFIG.astrologerShare).toFixed(2)}</td>
+                                        <td data-label={`You Receive (${astrologerPct}%)`} style={{ color: '#1cc88a', fontWeight: 600 }}>{currencySymbol}{(s.price * (1 - commissionRate)).toFixed(2)}</td>
                                         <td data-label="Status">
                                             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                                                 <button className={`toggle-btn ${s.active ? 'on' : 'off'}`} onClick={() => toggleService(s.id)}>{s.active ? 'Active' : 'Off'}</button>
@@ -1638,7 +1638,7 @@ const AstrologerDashboard = ({ user, onUserUpdate }) => {
                                         <td><strong>{b.clientRef}</strong></td>
                                         <td>{b.service}</td>
                                         <td>{currencySymbol}{b.amount}</td>
-                                        <td style={{ color: '#1cc88a', fontWeight: 600 }}>{currencySymbol}{(b.amount * PLATFORM_CONFIG.astrologerShare).toFixed(2)}</td>
+                                        <td style={{ color: '#1cc88a', fontWeight: 600 }}>{currencySymbol}{(b.amount * (1 - commissionRate)).toFixed(2)}</td>
                                         <td><StatusBadge status={b.status} /></td>
                                     </tr>
                                 ))}
