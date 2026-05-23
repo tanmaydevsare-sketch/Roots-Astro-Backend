@@ -86,6 +86,15 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
     const [selectedAstro, setSelectedAstro] = useState(null);
     const [zodiacSign, setZodiacSign] = useState('Leo');
     const [platformSettings, setPlatformSettings] = useState({ allowUpi: true, allowCard: true, allowNetBanking: true });
+    
+    /* ── Client Photo Cropper State ── */
+    const [cropModal, setCropModal] = useState(false);
+    const [rawImageSrc, setRawImageSrc] = useState('');
+    const [zoom, setZoom] = useState(1);
+    const [rotation, setRotation] = useState(0);
+    const [posX, setPosX] = useState(0);
+    const [posY, setPosY] = useState(0);
+
     const [passwordModal, setPasswordModal] = useState(false);
     const [passwordForm, setPasswordForm] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' });
     const [passwordLoading, setPasswordLoading] = useState(false);
@@ -383,30 +392,76 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
 
     const [imageLoading, setImageLoading] = useState(false);
 
-    const handleImageUpload = async (e) => {
+    const handleImageUpload = (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
         const reader = new FileReader();
         reader.readAsDataURL(file);
-        reader.onload = async () => {
-            const base64 = reader.result;
-            setImageLoading(true);
-            const token = localStorage.getItem('token');
-            try {
-                const res = await fetch(`${API_URL}/api/auth/me`, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                    body: JSON.stringify({ image: base64 })
-                });
-                if (res.ok) {
-                    setProfile(prev => ({ ...prev, image: base64 }));
-                    if (onUserUpdate) {
-                        onUserUpdate({ image: base64 });
-                    }
+        reader.onload = () => {
+            setRawImageSrc(reader.result);
+            setZoom(1);
+            setRotation(0);
+            setPosX(0);
+            setPosY(0);
+            setCropModal(true);
+        };
+        e.target.value = '';
+    };
+
+    const saveCroppedPhoto = async (base64) => {
+        setImageLoading(true);
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch(`${API_URL}/api/auth/me`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ image: base64 })
+            });
+            if (res.ok) {
+                setProfile(prev => ({ ...prev, image: base64 }));
+                if (onUserUpdate) {
+                    onUserUpdate({ image: base64 });
                 }
-            } catch (err) { console.error("Image upload failed", err); }
-            setImageLoading(false);
+                setCropModal(false);
+            } else {
+                const err = await res.json();
+                alert(err.error || "Failed to save photo");
+            }
+        } catch (err) {
+            console.error("Image upload failed", err);
+            alert("Error saving photo");
+        }
+        setImageLoading(false);
+    };
+
+    const handleCropApply = () => {
+        const img = new Image();
+        img.src = rawImageSrc;
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 400;
+            canvas.height = 400;
+            const ctx = canvas.getContext('2d');
+
+            ctx.beginPath();
+            ctx.arc(200, 200, 200, 0, Math.PI * 2);
+            ctx.clip();
+
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, 400, 400);
+
+            ctx.translate(200 + posX, 200 + posY);
+            ctx.rotate((rotation * Math.PI) / 180);
+            
+            const scaleFactor = Math.min(400 / img.width, 400 / img.height) * zoom;
+            const dw = img.width * scaleFactor;
+            const dh = img.height * scaleFactor;
+            
+            ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
+
+            const croppedBase64 = canvas.toDataURL('image/jpeg', 0.9);
+            saveCroppedPhoto(croppedBase64);
         };
     };
 
@@ -480,6 +535,77 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
                             setPasswordLoading(false);
                         }} disabled={passwordLoading}>
                             {profile.isPasswordSet ? (passwordLoading ? 'Updating...' : 'Update Password') : (passwordLoading ? 'Setting...' : 'Set Password')}
+                        </button>
+                    </div>
+                </div>
+            </Modal>
+
+            {/* ── Photo Adjust & Crop Modal ── */}
+            <Modal isOpen={cropModal} onClose={() => setCropModal(false)} title="Adjust & Frame Profile Photo" width="480px">
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem', padding: '1rem 0' }}>
+                    {/* Crop Preview Mask Circle */}
+                    <div style={{ width: '220px', height: '220px', borderRadius: '50%', overflow: 'hidden', border: '3px solid var(--secondary-color)', boxShadow: '0 8px 32px rgba(0,0,0,0.5)', background: '#111', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                        <img 
+                            src={rawImageSrc} 
+                            alt="Crop preview" 
+                            style={{ 
+                                width: '100%', 
+                                height: '100%', 
+                                objectFit: 'contain',
+                                transform: `translate(${posX}px, ${posY}px) scale(${zoom}) rotate(${rotation}deg)`,
+                                transition: 'none',
+                                userSelect: 'none',
+                                pointerEvents: 'none'
+                            }} 
+                        />
+                    </div>
+
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center', margin: 0 }}>
+                        Adjust controls to scale, rotate, and center your face inside the framing circle.
+                    </p>
+
+                    {/* Precision Sliders */}
+                    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '1rem', background: 'rgba(255,255,255,0.02)', padding: '1.25rem', borderRadius: '14px', border: '1px solid var(--glass-border)' }}>
+                        <div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '0.35rem' }}>
+                                <span>🔍 Zoom Scale</span>
+                                <strong>{zoom.toFixed(1)}x</strong>
+                            </div>
+                            <input type="range" min="1" max="4" step="0.1" value={zoom} onChange={e => setZoom(parseFloat(e.target.value))} style={{ width: '100%', accentColor: 'var(--secondary-color)', cursor: 'pointer' }} />
+                        </div>
+
+                        <div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '0.35rem' }}>
+                                <span>🔄 Rotation</span>
+                                <strong>{rotation}°</strong>
+                            </div>
+                            <input type="range" min="-180" max="180" step="1" value={rotation} onChange={e => setRotation(parseInt(e.target.value))} style={{ width: '100%', accentColor: 'var(--secondary-color)', cursor: 'pointer' }} />
+                        </div>
+
+                        <div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '0.35rem' }}>
+                                <span>↔ Pan Left / Right</span>
+                                <strong>{posX}px</strong>
+                            </div>
+                            <input type="range" min="-150" max="150" step="1" value={posX} onChange={e => setPosX(parseInt(e.target.value))} style={{ width: '100%', accentColor: 'var(--secondary-color)', cursor: 'pointer' }} />
+                        </div>
+
+                        <div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '0.35rem' }}>
+                                <span>↕ Pan Up / Down</span>
+                                <strong>{posY}px</strong>
+                            </div>
+                            <input type="range" min="-150" max="150" step="1" value={posY} onChange={e => setPosY(parseInt(e.target.value))} style={{ width: '100%', accentColor: 'var(--secondary-color)', cursor: 'pointer' }} />
+                        </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div style={{ display: 'flex', gap: '1rem', width: '100%' }}>
+                        <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleCropApply} disabled={imageLoading}>
+                            {imageLoading ? 'Saving...' : 'Apply & Save'}
+                        </button>
+                        <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => setCropModal(false)}>
+                            Cancel
                         </button>
                     </div>
                 </div>
@@ -1064,10 +1190,10 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
                                 <div>
                                     <h4 style={{ margin: '0 0 0.5rem 0' }}>Profile Photo</h4>
                                     <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>Update your photo for a personalized experience.</p>
-                                    <label className="btn btn-outline btn-sm" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <label htmlFor="client-photo-upload" className="btn btn-outline btn-sm" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
                                         <User size={14} /> {profile.image ? 'Change Photo' : 'Upload Photo'}
-                                        <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageUpload} />
                                     </label>
+                                    <input id="client-photo-upload" type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageUpload} />
                                 </div>
                             </div>
 
