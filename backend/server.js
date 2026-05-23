@@ -19,8 +19,29 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+const allowedOrigins = process.env.ALLOWED_ORIGINS 
+  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()) 
+  : [];
+
 const corsOptions = {
-  origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : '*',
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true); // Allow mobile/curl/postman/scripts
+    
+    const isAllowed = allowedOrigins.length === 0 || 
+                      allowedOrigins.includes(origin) || 
+                      allowedOrigins.includes('*') ||
+                      origin.endsWith('rootsastro.com') ||
+                      origin.endsWith('web.app') ||
+                      origin.endsWith('firebaseapp.com') ||
+                      origin.startsWith('http://localhost') ||
+                      origin.startsWith('http://127.0.0.1');
+                          
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'PUT', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true

@@ -46,6 +46,17 @@ const AdminDashboard = ({ user }) => {
     const [svcSaved, setSvcSaved] = useState(false);
     const [catSaved, setCatSaved] = useState(false);
 
+    const checkAuthError = (res) => {
+        if (res.status === 401 || res.status === 403) {
+            console.warn("Session expired or unauthorized. Logging out...");
+            localStorage.removeItem('token');
+            localStorage.removeItem('rootsastro_user');
+            window.location.reload();
+            return true;
+        }
+        return false;
+    };
+
     const openAddSvc = () => { setEditingSvc(null); setSvcForm({ name: '', description: '', categoryId: categories[0]?.id || '', active: true }); setSvcModal(true); };
     const openEditSvc = (s) => { setEditingSvc(s); setSvcForm({ name: s.name, description: s.description, categoryId: s.categoryId, active: s.active }); setSvcModal(true); };
     
@@ -133,6 +144,7 @@ const AdminDashboard = ({ user }) => {
             const res = await fetch(`${API_URL}/api/admin/master-services`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
+            if (checkAuthError(res)) return;
             if (res.ok) setPlatformServices(await res.json());
         } catch (err) { console.error("Fetch platform services failed", err); }
     };
@@ -144,6 +156,7 @@ const AdminDashboard = ({ user }) => {
             const res = await fetch(`${API_URL}/api/admin/categories`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
+            if (checkAuthError(res)) return;
             if (res.ok) setCategories(await res.json());
         } catch (err) { console.error("Fetch categories failed", err); }
     };
@@ -297,6 +310,7 @@ const AdminDashboard = ({ user }) => {
             const res = await fetch(`${API_URL}/api/astrologers`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
+            if (checkAuthError(res)) return;
             if (res.ok) {
                 const data = await res.json();
                 setAllAstros(data.map(p => {
@@ -326,6 +340,7 @@ const AdminDashboard = ({ user }) => {
             const res = await fetch(`${API_URL}/api/astrologers/admin/pending`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
+            if (checkAuthError(res)) return;
             if (res.ok) {
                 const data = await res.json();
                 setPendingAstros(data.map(p => ({
@@ -348,6 +363,7 @@ const AdminDashboard = ({ user }) => {
             const res = await fetch(`${API_URL}/api/auth/admin/users`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
+            if (checkAuthError(res)) return;
             if (res.ok) {
                 const data = await res.json();
                 setUsers(data.map(u => ({
@@ -356,7 +372,7 @@ const AdminDashboard = ({ user }) => {
                     email: u.email,
                     role: u.role,
                     status: u.status || 'active',
-                    joined: new Date(u.createdAt).toLocaleDateString(),
+                    joined: u.createdAt ? new Date(u.createdAt).toLocaleDateString() : 'N/A',
                     sessions: u.sessionsCount || 0
                 })));
             }
@@ -414,6 +430,7 @@ const AdminDashboard = ({ user }) => {
             const res = await fetch(`${API_URL}/api/settings/admin/gateways`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
+            if (checkAuthError(res)) return;
             if (res.ok) {
                 const data = await res.json();
                 setSettings({
@@ -484,6 +501,7 @@ const AdminDashboard = ({ user }) => {
             const res = await fetch(`${API_URL}/api/bookings/admin/all`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
+            if (checkAuthError(res)) return;
             if (res.ok) {
                 const data = await res.json();
                 setAllBookings(data.map(b => ({
@@ -509,6 +527,7 @@ const AdminDashboard = ({ user }) => {
                 const res = await fetch(`${API_URL}/api/finance/admin/dashboard`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
+                if (checkAuthError(res)) return;
                 if (res.ok) {
                     const data = await res.json();
                     setAdminFinance(prev => ({
