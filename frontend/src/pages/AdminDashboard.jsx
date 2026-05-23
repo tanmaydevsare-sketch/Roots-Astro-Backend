@@ -653,7 +653,7 @@ const AdminDashboard = ({ user }) => {
                 setWithdrawAmount('');
                 setAdminFinance(prev => ({ ...prev, availableBalance: prev.availableBalance - amt }));
             }
-        } catch (err) {
+        } catch {
             setWithdrawProcessing(false);
         }
     };

@@ -522,7 +522,7 @@ const AstrologerDashboard = ({ user, onUserUpdate }) => {
                 alert(err.error || "Withdrawal failed");
                 setWithdrawProcessing(false);
             }
-        } catch (err) {
+        } catch {
             setWithdrawProcessing(false);
         }
     };
@@ -666,7 +666,7 @@ const AstrologerDashboard = ({ user, onUserUpdate }) => {
                                 } else {
                                     setPasswordError(data.error || "Update failed");
                                 }
-                            } catch (err) { setPasswordError("Could not connect to server"); }
+                            } catch { setPasswordError("Could not connect to server"); }
                             setPasswordLoading(false);
                         }} disabled={passwordLoading}>
                             {profile.isPasswordSet ? (passwordLoading ? 'Updating...' : 'Update Password') : (passwordLoading ? 'Setting...' : 'Set Password')}

@@ -66,7 +66,7 @@ const Signup = ({ onLogin }) => {
             if (window.recaptchaVerifier) {
                 try {
                     window.recaptchaVerifier.clear();
-                } catch (err) {
+                } catch {
                     // Suppressed Clear Verifier Error
                 }
                 window.recaptchaVerifier = null;
@@ -209,7 +209,7 @@ const Signup = ({ onLogin }) => {
                 onLogin(updatedUser);
                 navigate('/client');
             }
-        } catch (err) { navigate('/client'); }
+        } catch { navigate('/client'); }
         setLoading(false);
     };
 

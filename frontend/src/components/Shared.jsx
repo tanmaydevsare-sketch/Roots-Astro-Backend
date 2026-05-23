@@ -89,7 +89,7 @@ export const AstrologerCard = ({ astro, onBook, hideRate = false }) => {
 };
 
 /* ─── Booking Wizard (5 steps: Service → Date/Time → Problem → Pay → Receipt) ─── */
-export const BookingModal = ({ astro, isOpen, onClose, onConfirm, activeGateway = 'razorpay', walletBalance = 0 }) => {
+export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance = 0 }) => {
     const { currencySymbol } = useSettings();
     const [step, setStep] = React.useState(1);
     const [selectedService, setSelectedService] = React.useState('');

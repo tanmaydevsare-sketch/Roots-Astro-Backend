@@ -52,7 +52,7 @@ const AstrologerApplication = ({ onLogin }) => {
             if (window.recaptchaVerifier) {
                 try {
                     window.recaptchaVerifier.clear();
-                } catch (err) {
+                } catch {
                     // Suppressed Clear Verifier Error
                 }
                 window.recaptchaVerifier = null;
@@ -134,7 +134,7 @@ const AstrologerApplication = ({ onLogin }) => {
 
             if (res.ok) setStep('complete');
             else alert('Error saving onboarding data.');
-        } catch (err) { alert('Form submission failed.'); }
+        } catch { alert('Form submission failed.'); }
         setLoading(false);
     };
 

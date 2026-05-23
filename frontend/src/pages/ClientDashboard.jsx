@@ -553,7 +553,7 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
                                 } else {
                                     setPasswordError(data.error || "Update failed");
                                 }
-                            } catch (err) { setPasswordError("Could not connect to server"); }
+                            } catch { setPasswordError("Could not connect to server"); }
                             setPasswordLoading(false);
                         }} disabled={passwordLoading}>
                             {profile.isPasswordSet ? (passwordLoading ? 'Updating...' : 'Update Password') : (passwordLoading ? 'Setting...' : 'Set Password')}

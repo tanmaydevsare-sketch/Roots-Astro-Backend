@@ -48,7 +48,7 @@ const Login = ({ onLogin, portal = 'CLIENT' }) => {
                 if (window.recaptchaVerifier) {
                     try {
                         window.recaptchaVerifier.clear();
-                    } catch (err) {
+                    } catch {
                         // Suppressed Clear Verifier Error
                     }
                     window.recaptchaVerifier = null;
@@ -117,7 +117,7 @@ const Login = ({ onLogin, portal = 'CLIENT' }) => {
                 onLogin(data.user);
                 navigate(PORTALS[portal].redirect);
             } else setError(data.error || 'Invalid credentials.');
-        } catch (err) { setError('Network error.'); }
+        } catch { setError('Network error.'); }
         setLoading(false);
     };
 
