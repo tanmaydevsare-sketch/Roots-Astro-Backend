@@ -580,6 +580,7 @@ const AdminDashboard = ({ user }) => {
         const token = localStorage.getItem('token');
         try {
             const body = {
+                ...settings,
                 activeGateway: pgConfig.activeGateway,
                 razorpayKeyId: pgConfig.razorpay.keyId,
                 razorpayKeySecret: pgConfig.razorpay.keySecret,
@@ -591,7 +592,6 @@ const AdminDashboard = ({ user }) => {
                 adminBankName: bankDetails.bankName,
                 adminAccountNo: bankDetails.accountNumber,
                 adminIfsc: bankDetails.ifsc,
-                ...settings
             };
 
             const res = await fetch(`${API_URL}/api/settings/admin/global`, {
