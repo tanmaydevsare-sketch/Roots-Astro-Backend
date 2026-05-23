@@ -111,7 +111,18 @@ router.post('/razorpay/order', authMiddleware, async (req, res) => {
             receipt: `receipt_${Date.now()}`,
         };
 
-        const order = await razorpay.orders.create(options);
+        // Load active configuration keys dynamically from database in real-time
+        const RazorpayPackage = require('razorpay');
+        const settings = await prisma.globalSettings.findUnique({ where: { id: 1 } });
+        const keyId = settings?.razorpayKeyId || process.env.RAZORPAY_KEY_ID || 'rzp_test_xxxxxxx';
+        const keySecret = settings?.razorpayKeySecret || process.env.RAZORPAY_KEY_SECRET || 'xxxxxxx';
+        
+        const dynamicRazorpay = new RazorpayPackage({
+            key_id: keyId,
+            key_secret: keySecret
+        });
+
+        const order = await dynamicRazorpay.orders.create(options);
         res.json(order);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -132,8 +143,13 @@ router.post('/razorpay/verify', authMiddleware, async (req, res) => {
 
     try {
         const sign = razorpay_order_id + "|" + razorpay_payment_id;
+        
+        // Load active configuration keys dynamically from database in real-time
+        const settings = await prisma.globalSettings.findUnique({ where: { id: 1 } });
+        const secret = settings?.razorpayKeySecret || process.env.RAZORPAY_KEY_SECRET || 'xxxxxxx';
+
         const expectedSign = crypto
-            .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET || 'xxxxxxx')
+            .createHmac("sha256", secret)
             .update(sign.toString())
             .digest("hex");
 

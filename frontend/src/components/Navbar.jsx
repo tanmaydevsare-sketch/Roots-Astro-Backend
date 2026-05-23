@@ -25,7 +25,11 @@ const Navbar = ({ user, onLogout }) => {
         return () => document.removeEventListener('mousedown', h);
     }, []);
 
-    useEffect(() => { setMobileOpen(false); }, [location.pathname]);
+    useEffect(() => {
+        if (mobileOpen) {
+            setMobileOpen(false);
+        }
+    }, [location.pathname, mobileOpen]);
     useEffect(() => { document.body.style.overflow = mobileOpen ? 'hidden' : ''; return () => { document.body.style.overflow = ''; }; }, [mobileOpen]);
 
     /* ── Authenticated ── */

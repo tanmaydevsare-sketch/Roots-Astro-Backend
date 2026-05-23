@@ -79,8 +79,8 @@ router.post('/astrologer/gateways/razorpay', authMiddleware, roleMiddleware(['AS
  */
 router.patch('/admin/global', authMiddleware, roleMiddleware(['SUPERADMIN', 'ADMIN']), async (req, res) => {
     try {
-        // Only SUPERADMIN can update certain sensitive fields (like storage keys)
-        const isSuperAdmin = req.user.role === 'SUPERADMIN';
+        // Both SUPERADMIN and ADMIN can update sensitive fields (like storage and payment gateway keys)
+        const isSuperAdmin = req.user.role === 'SUPERADMIN' || req.user.role === 'ADMIN';
         
         const superOnlyFields = [
             'activeStorage', 'storageBucket', 'storageRegion', 'storageEndpoint', 'storageAccessKey', 'storageSecretKey',

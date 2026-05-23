@@ -48,7 +48,9 @@ const Login = ({ onLogin, portal = 'CLIENT' }) => {
                 if (window.recaptchaVerifier) {
                     try {
                         window.recaptchaVerifier.clear();
-                    } catch (err) {}
+                    } catch (err) {
+                        // Suppressed Clear Verifier Error
+                    }
                     window.recaptchaVerifier = null;
                 }
                 window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {

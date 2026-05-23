@@ -94,6 +94,27 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
     const [rotation, setRotation] = useState(0);
     const [posX, setPosX] = useState(0);
     const [posY, setPosY] = useState(0);
+    const [isDragging, setIsDragging] = useState(false);
+    const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+
+    const handleDragStart = (e) => {
+        setIsDragging(true);
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        setDragStart({ x: clientX - posX, y: clientY - posY });
+    };
+
+    const handleDragMove = (e) => {
+        if (!isDragging) return;
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        setPosX(Math.max(-200, Math.min(200, clientX - dragStart.x)));
+        setPosY(Math.max(-200, Math.min(200, clientY - dragStart.y)));
+    };
+
+    const handleDragEnd = () => {
+        setIsDragging(false);
+    };
 
     const [passwordModal, setPasswordModal] = useState(false);
     const [passwordForm, setPasswordForm] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' });
@@ -404,6 +425,7 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
             setRotation(0);
             setPosX(0);
             setPosY(0);
+            setIsDragging(false);
             setCropModal(true);
         };
         e.target.value = '';
@@ -544,7 +566,31 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
             <Modal isOpen={cropModal} onClose={() => setCropModal(false)} title="Adjust & Frame Profile Photo" width="480px">
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem', padding: '1rem 0' }}>
                     {/* Crop Preview Mask Circle */}
-                    <div style={{ width: '220px', height: '220px', borderRadius: '50%', overflow: 'hidden', border: '3px solid var(--secondary-color)', boxShadow: '0 8px 32px rgba(0,0,0,0.5)', background: '#111', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                    <div 
+                        onMouseDown={handleDragStart}
+                        onMouseMove={handleDragMove}
+                        onMouseUp={handleDragEnd}
+                        onMouseLeave={handleDragEnd}
+                        onTouchStart={handleDragStart}
+                        onTouchMove={handleDragMove}
+                        onTouchEnd={handleDragEnd}
+                        style={{ 
+                            width: '220px', 
+                            height: '220px', 
+                            borderRadius: '50%', 
+                            overflow: 'hidden', 
+                            border: '3px solid var(--secondary-color)', 
+                            boxShadow: '0 8px 32px rgba(0,0,0,0.5)', 
+                            background: '#111', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center', 
+                            position: 'relative',
+                            cursor: isDragging ? 'grabbing' : 'grab',
+                            userSelect: 'none',
+                            touchAction: 'none'
+                        }}
+                    >
                         <img 
                             src={rawImageSrc} 
                             alt="Crop preview" 
@@ -562,6 +608,10 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
 
                     <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center', margin: 0 }}>
                         Adjust controls to scale, rotate, and center your face inside the framing circle.
+                        <br />
+                        <span style={{ display: 'inline-block', marginTop: '0.5rem', color: 'var(--secondary-color)', fontWeight: '500' }}>
+                            💡 Tip: You can drag or swipe the photo directly inside the circle above to center it!
+                        </span>
                     </p>
 
                     {/* Precision Sliders */}

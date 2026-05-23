@@ -774,6 +774,7 @@ const AdminDashboard = ({ user }) => {
                                 <AstrologerCard 
                                     key={astro.id} 
                                     astro={astro} 
+                                    hideRate={true}
                                     onBook={() => { setViewAstro(astro); setAstroDetailOpen(true); }} 
                                 />
                             ))}
@@ -786,7 +787,6 @@ const AdminDashboard = ({ user }) => {
                                     <div style={{ flex: 1 }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                             <h3 style={{ margin: 0 }}>{astro.name}</h3>
-                                            <span style={{ color: 'var(--secondary-color)', fontWeight: 700 }}>{currencySymbol}{astro.rate}/min</span>
                                         </div>
                                         <p style={{ margin: '0.5rem 0', color: 'var(--text-muted)' }}>{astro.bio}</p>
                                         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -1426,7 +1426,7 @@ const AdminDashboard = ({ user }) => {
                                 </div>
                             </div>
 
-                            <button className="btn btn-primary btn-sm btn-block" onClick={() => { saveGlobalSettings('all'); refreshSettings(); }}>
+                            <button className="btn btn-primary btn-sm btn-block" onClick={() => { saveGlobalSettings('all'); }}>
                                 <Save size={14} style={{ marginRight: '0.4rem' }} /> Update Master Config
                             </button>
                         </div>

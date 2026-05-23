@@ -66,7 +66,9 @@ const Signup = ({ onLogin }) => {
             if (window.recaptchaVerifier) {
                 try {
                     window.recaptchaVerifier.clear();
-                } catch (err) {}
+                } catch (err) {
+                    // Suppressed Clear Verifier Error
+                }
                 window.recaptchaVerifier = null;
             }
             window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
@@ -270,16 +272,7 @@ const Signup = ({ onLogin }) => {
                                 </div>
                             </button>
 
-                            {/* Super Admin Option */}
-                            <button onClick={() => handleRoleSelect('ADMIN')} style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', padding: '1.5rem', borderRadius: '16px', background: 'rgba(107, 144, 176, 0.05)', border: '1px solid rgba(107, 144, 176, 0.25)', textAlign: 'left', transition: 'all 0.3s', cursor: 'pointer' }}>
-                                <div style={{ width: '48px', height: '48px', background: 'rgba(107, 144, 176, 0.1)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: '#6B90B0' }}>
-                                    <Shield size={24} />
-                                </div>
-                                <div>
-                                    <strong style={{ display: 'block', fontSize: '1.1rem', color: '#6B90B0' }}>Platform Owner (Super Admin)</strong>
-                                    <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: '0.2rem 0 0' }}>Launch and manage platform-wide configuration.</p>
-                                </div>
-                            </button>
+
 
                         </div>
                     </div>
