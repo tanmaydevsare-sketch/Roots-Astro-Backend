@@ -459,8 +459,7 @@ const AstrologerDashboard = ({ user, onUserUpdate }) => {
                 { id: 'bookings', icon: <Calendar size={19} />, label: 'Appointments' },
                 { id: 'services', icon: <Star size={19} />, label: 'Services' },
                 { id: 'schedule', icon: <Clock size={19} />, label: 'Schedule' },
-                { id: 'earnings', icon: <Wallet size={19} />, label: 'Earnings' },
-                { id: 'settings', icon: <Settings size={19} />, label: 'Settings' }
+                { id: 'earnings', icon: <Wallet size={19} />, label: 'Earnings' }
             ].map(item => <SidebarBtn key={item.id} {...item} active={tab === item.id} onClick={(id) => setTab(id)} />)}
         </>
     );
