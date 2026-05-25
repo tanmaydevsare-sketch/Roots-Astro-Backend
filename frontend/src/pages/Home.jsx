@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Star, Shield, Video, CreditCard, Calendar, ChevronRight, CheckCircle, Globe, Zap } from 'lucide-react';
 import { ASTROLOGERS, TESTIMONIALS } from '../data/mockData';
 import { useSettings } from '../context/SettingsContext';
+import API_URL from '../api/config';
 
 const StarRating = ({ rating }) => (
     <div className="astro-stars">
@@ -24,6 +25,35 @@ const Home = ({ view }) => {
         feature3Title,
         feature3Desc
     } = useSettings();
+
+    const [liveAstrologers, setLiveAstrologers] = useState([]);
+
+    useEffect(() => {
+        const fetchAstrologers = async () => {
+            try {
+                const res = await fetch(`${API_URL}/api/astrologers`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (Array.isArray(data) && data.length > 0) {
+                        const formatted = data.map(u => ({
+                            id: u.id,
+                            name: `${u.firstName} ${u.lastName}`.trim(),
+                            expertise: u.astrologerProfile?.expertise 
+                                ? u.astrologerProfile.expertise.split(',').map(s => s.trim()) 
+                                : ['Astrology'],
+                            rate: u.astrologerProfile?.rate || '50',
+                            rating: u.astrologerProfile?.rating || 5.0,
+                            available: u.astrologerProfile?.isOnline ?? false
+                        }));
+                        setLiveAstrologers(formatted);
+                    }
+                }
+            } catch (err) {
+                console.error("Error fetching approved astrologers:", err);
+            }
+        };
+        fetchAstrologers();
+    }, []);
 
     return (
         <div className="home-page">
@@ -87,7 +117,7 @@ const Home = ({ view }) => {
                             <p className="section-sub">Every astrologer on our platform is background-checked, certified, and reviewed.</p>
                         </div>
                         <div className="astro-preview-grid">
-                            {ASTROLOGERS.slice(0, 6).map(astro => (
+                            {(liveAstrologers.length > 0 ? liveAstrologers : ASTROLOGERS).slice(0, 6).map(astro => (
                                 <div key={astro.id} className="astro-preview-card glass-card">
                                     <div className="astro-preview-top">
                                         <div className="astro-avatar-home">{astro.name.charAt(0)}</div>
