@@ -143,5 +143,5 @@ export const ASTROLOGER_EARNINGS = [
 export const TESTIMONIALS = [
     { name: 'Prashant M.', role: 'Client', rating: 5, text: "Roots Astro helped me find clarity during one of the most difficult periods of my life. Acharya Rajesh was spot on with his analysis. Truly transformative!" },
     { name: 'Sarah K.', role: 'Client', rating: 5, text: "I was skeptical at first, but Anubha Jain's tarot reading was incredibly accurate. The platform is beautiful and the booking process was seamless." },
-    { name: 'Maneesha Devsare', role: 'Client', rating: 5, text: "Booked 4 sessions already. Every astrologer here is professional, punctual, and deeply knowledgeable. Worth every penny!" },
+    { name: 'Maneesha Devsare', role: 'Astrologer', rating: 5, text: "As an astrologer, Roots Astro has provided me with an incredibly professional platform to connect with genuine seekers. The automated Zoom integration and wallet payouts make managing my practice seamless." },
 ];
