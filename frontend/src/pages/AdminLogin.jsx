@@ -191,9 +191,7 @@ const AdminLogin = ({ onLogin }) => {
                 </div>
 
                 <div className="login-brand" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                    <div className="brand-icon" style={{ background: adminExists ? '#6B90B0' : '#D4AF37', padding: '0.25rem', borderRadius: '4px' }}>
-                        <Star size={14} color="#1A1102" strokeWidth={2.5} />
-                    </div>
+                    <img src="/logo.png" alt="Logo" className="brand-logo-img" style={{ height: '32px', objectFit: 'contain' }} />
                     <span className="brand-text" style={{ fontSize: '1.25rem', fontWeight: 800 }}>
                         Roots <span className="brand-accent" style={{ color: adminExists ? '#6B90B0' : '#D4AF37' }}>Admin</span>
                     </span>

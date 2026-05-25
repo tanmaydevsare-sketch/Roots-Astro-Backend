@@ -204,7 +204,7 @@ const Home = ({ view }) => {
                 <div className="container footer-inner">
                     <div className="footer-brand">
                         <div className="brand" style={{ marginBottom: '1rem' }}>
-                            <div className="brand-icon" style={{ background: 'var(--secondary-color)' }}><Star size={16} color="var(--primary-color)" strokeWidth={2.5} /></div>
+                            <img src="/logo.png" alt="Logo" className="brand-logo-img" style={{ height: '38px', objectFit: 'contain' }} />
                             <span className="brand-text">{platformName?.split(' ')[0] || 'Roots'} <span className="brand-accent" style={{ color: 'var(--secondary-color)' }}>{platformName?.split(' ')[1] || 'Astro'}</span></span>
                         </div>
                         <p className="footer-tagline">Celestial guidance, professionally delivered. Available worldwide.</p>

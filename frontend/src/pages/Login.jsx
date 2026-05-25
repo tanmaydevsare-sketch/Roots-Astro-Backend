@@ -127,7 +127,7 @@ const Login = ({ onLogin, portal = 'CLIENT' }) => {
         <div className="login-page">
             <div className="login-left">
                 <div className="login-brand">
-                    <div className="brand-icon"><Star size={20} color="#1A1102" strokeWidth={2.5} /></div>
+                    <img src="/logo.png" alt="Logo" className="brand-logo-img" style={{ height: '38px', objectFit: 'contain' }} />
                     <span className="brand-text">Roots <span className="brand-accent">Astro</span></span>
                 </div>
                 <div className="fade-in">

@@ -48,7 +48,7 @@ const Navbar = ({ user, onLogout }) => {
                             {siteLogo ? (
                                 <img src={siteLogo.startsWith('http') ? siteLogo : `${API_URL}${siteLogo}`} alt="Logo" className="brand-logo-img" />
                             ) : (
-                                <div className="brand-icon"><Star size={17} color="#1A1102" strokeWidth={2.5} /></div>
+                                <img src="/logo.png" alt="Logo" className="brand-logo-img" />
                             )}
                             <span className="brand-text">Roots <span className="brand-accent">Astro</span></span>
                         </Link>
@@ -143,7 +143,7 @@ const Navbar = ({ user, onLogout }) => {
                             {siteLogo ? (
                                 <img src={siteLogo.startsWith('http') ? siteLogo : `${API_URL}${siteLogo}`} alt="Logo" className="brand-logo-img" />
                             ) : (
-                                <div className="brand-icon"><Star size={17} color="#1A1102" strokeWidth={2.5} /></div>
+                                <img src="/logo.png" alt="Logo" className="brand-logo-img" />
                             )}
                             <span className="brand-text">Roots <span className="brand-accent">Astro</span></span>
                         </Link>
