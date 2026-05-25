@@ -810,7 +810,7 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
                                             <div className="astro-avatar" style={{ width: 40, height: 40, fontSize: '0.9rem' }}>{a.name.charAt(0)}</div>
                                             <div style={{ flex: 1 }}>
                                                 <strong style={{ fontSize: '0.9rem' }}>{a.name}</strong>
-                                                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{currencySymbol}{a.rate}/session</p>
+                                                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{currencySymbol}{a.rate}/min</p>
                                             </div>
                                             <button className="btn btn-ghost btn-sm" onClick={() => handleBook(a)}>Book</button>
                                         </div>
@@ -927,7 +927,7 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
                                                     <span style={{ fontSize: '0.8rem' }}>{a.rating} ({a.reviews})</span>
                                                 </div>
                                                 <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: '0.5rem 0' }}>{a.expertise.join(' · ')}</p>
-                                                <span className="astro-rate">{currencySymbol}{a.rate}<small>/session</small></span>
+                                                <span className="astro-rate">{currencySymbol}{a.rate}<small>/min</small></span>
                                             </div>
                                             <button className="btn btn-primary" onClick={() => handleBook(a)}>Book Now</button>
                                         </div>

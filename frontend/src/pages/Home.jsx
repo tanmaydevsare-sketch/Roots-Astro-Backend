@@ -129,7 +129,7 @@ const Home = ({ view }) => {
                                         {astro.expertise.slice(0, 2).map((e, i) => <span key={i} className="expertise-tag" style={{ border: '1px solid var(--secondary-color)', color: 'var(--secondary-color)', background: 'transparent' }}>{e}</span>)}
                                     </div>
                                     <div className="preview-footer">
-                                        <span className="astro-rate">{currencySymbol}{astro.rate}<small>/session</small></span>
+                                        <span className="astro-rate">{currencySymbol}{astro.rate}<small>/min</small></span>
                                         <Link to="/login" className="btn btn-outline btn-sm">Book Now</Link>
                                     </div>
                                 </div>

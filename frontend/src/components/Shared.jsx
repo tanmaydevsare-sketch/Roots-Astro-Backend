@@ -77,7 +77,7 @@ export const AstrologerCard = ({ astro, onBook, hideRate = false }) => {
             <p className="astro-bio">{astro.bio}</p>
             <div className="astro-card-footer">
                 <div>
-                    {!hideRate && <span className="astro-rate">{currencySymbol}{astro.rate}<small>/session</small></span>}
+                    {!hideRate && <span className="astro-rate">{currencySymbol}{astro.rate}<small>/min</small></span>}
                     <p className="astro-sessions">{astro.sessions.toLocaleString()} sessions</p>
                 </div>
                 <button className={`btn btn-sm ${astro.available ? 'btn-primary' : 'btn-disabled'}`} onClick={() => astro.available && onBook(astro)} disabled={!astro.available}>
