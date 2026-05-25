@@ -58,7 +58,7 @@ export const ASTROLOGERS = [
     { id: 3, name: 'Pandit Suresh Sharma', expertise: ['Vedic Astrology', 'Palmistry', 'Gemology'], rate: 40, rating: 4.7, reviews: 425, sessions: 1890, languages: 'English, Hindi, Telugu', bio: 'University professor of Vedic studies with deep expertise in palmistry and gemstone therapy.', available: true, slots: ['8:00 AM', '9:00 AM', '1:00 PM', '3:00 PM'] },
     { id: 4, name: 'Maya Chen', expertise: ['Chinese Astrology', 'Feng Shui', 'Ba Zi'], rate: 65, rating: 4.9, reviews: 156, sessions: 680, languages: 'English, Mandarin', bio: 'Master of Chinese metaphysics blending ancient wisdom with modern life consulting.', available: false, slots: ['11:00 AM', '2:00 PM', '4:00 PM'] },
     { id: 5, name: 'Ravi Shankar Joshi', expertise: ['Jyotish', 'Muhurta', 'Prashna'], rate: 45, rating: 4.6, reviews: 289, sessions: 1100, languages: 'English, Hindi, Gujarati', bio: 'Specialist in electional astrology and horary questions with deep classical training.', available: true, slots: ['9:00 AM', '11:00 AM', '2:00 PM', '5:00 PM'] },
-    { id: 6, name: 'Sophia Laurent', expertise: ['Western Astrology', 'Synastry', 'Solar Returns'], rate: 80, rating: 5.0, reviews: 97, sessions: 410, languages: 'English, French', bio: 'Psychological astrologer blending Jungian archetypes with natal chart interpretation.', available: true, slots: ['10:00 AM', '1:00 PM', '3:00 PM', '5:00 PM'] },
+    { id: 6, name: 'Maneesha Devsare', expertise: ['Vedic Astrology', 'Palmistry', 'Kundli'], rate: 80, rating: 5.0, reviews: 97, sessions: 410, languages: 'English, Hindi', bio: 'Renowned astrologer blending classical principles with psychological chart interpretation.', available: true, slots: ['10:00 AM', '1:00 PM', '3:00 PM', '5:00 PM'] },
 ];
 
 // ── Client Bookings ───────────────────────────────────────────────
@@ -143,5 +143,5 @@ export const ASTROLOGER_EARNINGS = [
 export const TESTIMONIALS = [
     { name: 'Prashant M.', role: 'Client', rating: 5, text: "Roots Astro helped me find clarity during one of the most difficult periods of my life. Acharya Rajesh was spot on with his analysis. Truly transformative!" },
     { name: 'Sarah K.', role: 'Client', rating: 5, text: "I was skeptical at first, but Anubha Jain's tarot reading was incredibly accurate. The platform is beautiful and the booking process was seamless." },
-    { name: 'Maneesha Devsare', role: 'Astrologer', rating: 5, text: "As an astrologer, Roots Astro has provided me with an incredibly professional platform to connect with genuine seekers. The automated Zoom integration and wallet payouts make managing my practice seamless." },
+    { name: 'Amit R.', role: 'Client', rating: 5, text: "I booked 4 sessions with Maneesha Devsare. She is incredibly professional, punctual, and deeply knowledgeable. Her astrological guidance has been spot-on and worth every penny!" },
 ];
