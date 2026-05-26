@@ -962,7 +962,7 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
                         <>
                             {viewMode === 'grid' && (
                                 <div className="astro-grid">
-                                    {filteredAstros.map(a => <AstrologerCard key={a.id} astro={a} onBook={handleBook} />)}
+                                    {filteredAstros.map(a => <AstrologerCard key={a.id} astro={a} onBook={setSelectedAstro} />)}
                                 </div>
                             )}
 
@@ -980,7 +980,10 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
                                                 <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: '0.5rem 0' }}>{a.expertise.join(' · ')}</p>
                                                 <span className="astro-rate">{currencySymbol}{a.rate}<small>/min</small></span>
                                             </div>
-                                            <button className="btn btn-primary" onClick={() => handleBook(a)}>Book Now</button>
+                                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                <button className="btn btn-outline btn-sm" onClick={() => setSelectedAstro(a)} style={{ whiteSpace: 'nowrap' }}>View Profile</button>
+                                                <button className="btn btn-primary btn-sm" onClick={() => handleBook(a)} style={{ whiteSpace: 'nowrap' }}>Book Now</button>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
