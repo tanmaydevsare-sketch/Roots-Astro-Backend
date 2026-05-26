@@ -346,6 +346,103 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
 
     const handleConfirmBooking = async (booking) => {
         const token = localStorage.getItem('token');
+        
+        if (booking.paymentMethod === 'razorpay') {
+            if (!window.Razorpay) {
+                alert("Payment system is still loading. Please wait a few seconds and try again.");
+                return;
+            }
+            try {
+                // 1. Create Order on Backend
+                const orderRes = await fetch(`${API_URL}/api/finance/razorpay/order`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ amount: parseFloat(booking.amount) })
+                });
+                
+                if (!orderRes.ok) throw new Error("Order creation failed");
+                const order = await orderRes.json();
+
+                // 2. Open Razorpay Checkout and await confirmation
+                return new Promise((resolve, reject) => {
+                    const options = {
+                        key: platformSettings.razorpayKeyId || "rzp_test_U8N0Y3vP9m1Q2X",
+                        amount: order.amount,
+                        currency: order.currency,
+                        name: "Roots Astro",
+                        description: `Direct Booking - ${booking.service}`,
+                        order_id: order.id,
+                        handler: async function (response) {
+                            try {
+                                // 3. Verify Payment on Backend
+                                const verifyRes = await fetch(`${API_URL}/api/finance/razorpay/verify`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                                    body: JSON.stringify({
+                                        ...response,
+                                        amount: parseFloat(booking.amount)
+                                    })
+                                });
+
+                                if (!verifyRes.ok) {
+                                    alert("Payment verification failed");
+                                    reject(new Error("Payment verification failed"));
+                                    return;
+                                }
+
+                                const verifyData = await verifyRes.json();
+                                // Balance is credited, now confirm booking via WALLET
+                                const bookingRes = await fetch(`${API_URL}/api/bookings/create`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                                    body: JSON.stringify({
+                                        astrologerId: booking.astrologerId,
+                                        serviceId: booking.serviceId || 1,
+                                        scheduledAt: booking.date + ' ' + booking.time,
+                                        amount: booking.amount,
+                                        paymentMethod: 'WALLET'
+                                    })
+                                });
+
+                                if (bookingRes.ok) {
+                                    const bookingData = await bookingRes.json();
+                                    setWalletBalance(bookingData.newBalance);
+                                    fetchWalletStats();
+                                    fetchBookings();
+                                    resolve({ ...bookingData, paymentRef: response.razorpay_payment_id });
+                                } else {
+                                    const err = await bookingRes.json();
+                                    alert(err.error || "Booking creation failed");
+                                    reject(new Error(err.error || "Booking creation failed"));
+                                }
+                            } catch (verifyErr) {
+                                console.error("Verify and Booking confirm error", verifyErr);
+                                reject(verifyErr);
+                            }
+                        },
+                        prefill: {
+                            name: `${profile.firstName || ''} ${profile.lastName || ''}`,
+                            email: profile.email,
+                            contact: profile.phone
+                        },
+                        theme: { color: "#2D1E4D" },
+                        modal: {
+                            ondismiss: function () {
+                                reject(new Error("Payment window dismissed."));
+                            }
+                        }
+                    };
+                    const rzp = new window.Razorpay(options);
+                    rzp.open();
+                });
+            } catch (err) {
+                console.error("Razorpay Direct Booking error", err);
+                alert("Something went wrong initializing the Razorpay payment.");
+                throw err;
+            }
+        }
+
+        // Standard WALLET / EXTERNAL (mock) path
         try {
             const res = await fetch(`${API_URL}/api/bookings/create`, {
                 method: 'POST',
@@ -353,7 +450,7 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
                 body: JSON.stringify({
                     astrologerId: booking.astrologerId,
                     serviceId: booking.serviceId || 1,
-                    scheduledAt: booking.date + ' ' + booking.time, // Simplistic mapping
+                    scheduledAt: booking.date + ' ' + booking.time,
                     amount: booking.amount,
                     paymentMethod: booking.paymentMethod === 'WALLET' ? 'WALLET' : 'EXTERNAL'
                 })
@@ -363,15 +460,18 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
                 const data = await res.json();
                 if (booking.paymentMethod === 'WALLET') {
                     setWalletBalance(data.newBalance);
-                    fetchWalletStats(); // Refresh history
+                    fetchWalletStats();
                 }
-                fetchBookings(); // Refresh live bookings from backend
+                fetchBookings();
+                return data;
             } else {
                 const err = await res.json();
                 alert(err.error || "Booking failed");
+                throw new Error(err.error || "Booking failed");
             }
         } catch (err) {
             console.error("Booking error", err);
+            throw err;
         }
     };
 

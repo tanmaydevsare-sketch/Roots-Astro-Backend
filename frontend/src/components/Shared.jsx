@@ -209,22 +209,19 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance 
     const [manualInstructions, setManualInstructions] = React.useState(null);
 
     // Simulate payment gateway
-    const initiatePayment = () => {
+    // Simulate/Process payment gateway
+    const initiatePayment = async () => {
         if (paymentMethod === 'WALLET') {
             if (walletBalance < price) {
                 alert("Insufficient wallet balance. Please top up your wallet.");
                 return;
             }
-            // confirmed via wallet
             setPaymentProcessing(true);
-            setTimeout(() => {
+            try {
                 const ref = `WAL-${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
-                setPaymentRef(ref);
-                setPaymentProcessing(false);
-                setPaymentDone(true);
-                onConfirm({
+                await onConfirm({
                     astrologer: astro.name, astrologerId: astro.id,
-                    serviceId: currentService?.id || 1, // Fallback
+                    serviceId: currentService?.id || 1,
                     service: selectedService, date: selectedDate, time: selectedSlot,
                     amount: price, platformFee, astrologerReceives,
                     status: 'upcoming',
@@ -232,7 +229,13 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance 
                     problemDescription: problemText.trim(),
                     paymentMethod, paymentRef: ref,
                 });
-            }, 1500);
+                setPaymentRef(ref);
+                setPaymentDone(true);
+            } catch (err) {
+                console.error("Booking via wallet failed", err);
+            } finally {
+                setPaymentProcessing(false);
+            }
             return;
         }
 
@@ -244,16 +247,60 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance 
             return;
         }
 
+        if (paymentMethod === 'razorpay') {
+            setPaymentProcessing(true);
+            try {
+                const res = await onConfirm({
+                    astrologer: astro.name, astrologerId: astro.id,
+                    serviceId: currentService?.id || 1,
+                    service: selectedService, date: selectedDate, time: selectedSlot,
+                    amount: price, platformFee, astrologerReceives,
+                    status: 'upcoming',
+                    zoomLink: 'https://zoom.us/j/mock' + Date.now(),
+                    problemDescription: problemText.trim(),
+                    paymentMethod,
+                });
+                
+                setPaymentRef(res?.paymentRef || res?.booking?.id || `RZP-${Date.now()}`);
+                setPaymentDone(true);
+            } catch (err) {
+                console.error("Razorpay payment failed or was closed", err);
+            } finally {
+                setPaymentProcessing(false);
+            }
+            return;
+        }
+
+        // Other external modes (like PayPal) - fallback mock
         setPaymentProcessing(true);
-        setTimeout(() => {
-            const ref = paymentMethod === 'razorpay'
-                ? `rzp_live_${Math.random().toString(36).slice(2, 12).toUpperCase()}`
-                : `PAYID-${Math.random().toString(36).slice(2, 14).toUpperCase()}`;
-            setPaymentRef(ref);
-            setPaymentProcessing(false);
-            setPaymentDone(true);
-            // Trigger booking creation
-            onConfirm({
+        setTimeout(async () => {
+            try {
+                const ref = `PAYID-${Math.random().toString(36).slice(2, 14).toUpperCase()}`;
+                await onConfirm({
+                    astrologer: astro.name, astrologerId: astro.id,
+                    serviceId: currentService?.id || 1,
+                    service: selectedService, date: selectedDate, time: selectedSlot,
+                    amount: price, platformFee, astrologerReceives,
+                    status: 'upcoming',
+                    zoomLink: 'https://zoom.us/j/mock' + Date.now(),
+                    problemDescription: problemText.trim(),
+                    paymentMethod, paymentRef: ref,
+                });
+                setPaymentRef(ref);
+                setPaymentDone(true);
+            } catch (err) {
+                console.error("Mock booking failed", err);
+            } finally {
+                setPaymentProcessing(false);
+            }
+        }, 2200);
+    };
+
+    const confirmManualPayment = async () => {
+        const ref = `MAN-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+        setPaymentProcessing(true);
+        try {
+            await onConfirm({
                 astrologer: astro.name, astrologerId: astro.id,
                 serviceId: currentService?.id || 1,
                 service: selectedService, date: selectedDate, time: selectedSlot,
@@ -263,23 +310,13 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance 
                 problemDescription: problemText.trim(),
                 paymentMethod, paymentRef: ref,
             });
-        }, 2200);
-    };
-
-    const confirmManualPayment = () => {
-        const ref = `MAN-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-        setPaymentRef(ref);
-        setPaymentDone(true);
-        onConfirm({
-            astrologer: astro.name, astrologerId: astro.id,
-            serviceId: currentService?.id || 1,
-            service: selectedService, date: selectedDate, time: selectedSlot,
-            amount: price, platformFee, astrologerReceives,
-            status: 'upcoming',
-            zoomLink: 'https://zoom.us/j/mock' + Date.now(),
-            problemDescription: problemText.trim(),
-            paymentMethod, paymentRef: ref,
-        });
+            setPaymentRef(ref);
+            setPaymentDone(true);
+        } catch (err) {
+            console.error("Manual booking confirmation failed", err);
+        } finally {
+            setPaymentProcessing(false);
+        }
     };
 
     const steps = ['Select Service', 'Date & Time', 'Your Problem', 'Payment', 'Receipt'];
