@@ -110,6 +110,19 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance 
     const [paymentDone, setPaymentDone] = React.useState(false);
     const [paymentRef, setPaymentRef] = React.useState('');
 
+    const services = astro?.astrologerProfile?.services?.length > 0
+        ? astro.astrologerProfile.services.map(s => ({
+            id: s.id,
+            name: s.title,
+            duration: `${s.duration} min`,
+            price: s.price
+          }))
+        : astro ? [
+            { id: 1, name: 'Natal Chart Analysis', duration: '45 min', price: astro.rate },
+            { id: 2, name: 'Relationship Compatibility', duration: '60 min', price: astro.rate + 25 },
+            { id: 3, name: 'Career & Finance Forecast', duration: '30 min', price: Math.max(30, astro.rate - 10) },
+          ] : [];
+
     const slots = React.useMemo(() => {
         if (astro?.slots && astro.slots.length > 0) {
             return astro.slots;
@@ -124,38 +137,52 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance 
             const dayAvails = availList.filter(av => av.dayOfWeek === dbDayIndex);
             
             if (dayAvails.length > 0) {
+                const parseTimeToMin = (t) => {
+                    if (!t) return null;
+                    t = t.trim().toUpperCase();
+                    if (t.includes(':')) {
+                        const parts = t.split(' ')[0].split(':');
+                        let h = parseInt(parts[0]) || 0;
+                        let m = parseInt(parts[1]) || 0;
+                        if (t.includes('PM') && h !== 12) {
+                            h += 12;
+                        } else if (t.includes('AM') && h === 12) {
+                            h = 0;
+                        }
+                        return h * 60 + m;
+                    }
+                    return null;
+                };
+
+                const minToTimeStr = (totalMin) => {
+                    let h = Math.floor(totalMin / 60);
+                    let m = totalMin % 60;
+                    const ampm = h >= 12 ? 'PM' : 'AM';
+                    const displayHour = h % 12 === 0 ? 12 : h % 12;
+                    return `${displayHour}:${String(m).padStart(2, '0')} ${ampm}`;
+                };
+
                 const computedSlots = [];
+                const currentService = services.find(s => s.name === selectedService);
+                const serviceDuration = currentService ? (parseInt(currentService.duration) || 30) : 30;
+                const bufferTime = astro?.astrologerProfile?.buffer ? (parseInt(astro.astrologerProfile.buffer) || 0) : 0;
+
                 dayAvails.forEach(av => {
-                    let startHour = 9;
-                    let endHour = 17;
-                    
-                    if (av.startTime) {
-                        const cleanStart = av.startTime.toUpperCase();
-                        let hour = parseInt(cleanStart.split(':')[0]) || 9;
-                        if (cleanStart.includes('PM') && hour !== 12) {
-                            hour += 12;
-                        } else if (cleanStart.includes('AM') && hour === 12) {
-                            hour = 0;
+                    const startMin = parseTimeToMin(av.startTime) ?? 540;
+                    const endMin = parseTimeToMin(av.endTime) ?? 1080;
+                    const breakStartMin = av.breakStart ? parseTimeToMin(av.breakStart) : null;
+                    const breakEndMin = av.breakEnd ? parseTimeToMin(av.breakEnd) : null;
+
+                    let currentMin = startMin;
+                    while (currentMin + serviceDuration <= endMin) {
+                        const isBreak = breakStartMin !== null && breakEndMin !== null && 
+                                        (currentMin < breakEndMin && currentMin + serviceDuration > breakStartMin);
+                        if (isBreak) {
+                            currentMin = breakEndMin;
+                            continue;
                         }
-                        startHour = hour;
-                    }
-                    if (av.endTime) {
-                        const cleanEnd = av.endTime.toUpperCase();
-                        let hour = parseInt(cleanEnd.split(':')[0]) || 17;
-                        if (cleanEnd.includes('PM') && hour !== 12) {
-                            hour += 12;
-                        } else if (cleanEnd.includes('AM') && hour === 12) {
-                            hour = 0;
-                        }
-                        endHour = hour - 1;
-                    }
-                    
-                    for (let h = startHour; h <= endHour; h++) {
-                        if (h === 13) continue; // Skip 1:00 PM break hour
-                        
-                        const displayHour = h % 12 === 0 ? 12 : h % 12;
-                        const ampm = h >= 12 ? 'PM' : 'AM';
-                        computedSlots.push(`${displayHour}:00 ${ampm}`);
+                        computedSlots.push(minToTimeStr(currentMin));
+                        currentMin += serviceDuration + bufferTime;
                     }
                 });
                 
@@ -165,20 +192,7 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance 
         }
         
         return ['9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM'];
-    }, [astro, selectedDate]);
-
-    const services = astro?.astrologerProfile?.services?.length > 0
-        ? astro.astrologerProfile.services.map(s => ({
-            id: s.id,
-            name: s.title,
-            duration: `${s.duration} min`,
-            price: s.price
-          }))
-        : astro ? [
-            { id: 1, name: 'Natal Chart Analysis', duration: '45 min', price: astro.rate },
-            { id: 2, name: 'Relationship Compatibility', duration: '60 min', price: astro.rate + 25 },
-            { id: 3, name: 'Career & Finance Forecast', duration: '30 min', price: Math.max(30, astro.rate - 10) },
-          ] : [];
+    }, [astro, selectedDate, selectedService]);
     const dates = Array.from({length: 5}, (_, i) => { const d = new Date(); d.setDate(d.getDate() + i); return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); });
     const currentService = services.find(s => s.name === selectedService);
     const price = currentService?.price || 0;
@@ -241,6 +255,7 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance 
             // Trigger booking creation
             onConfirm({
                 astrologer: astro.name, astrologerId: astro.id,
+                serviceId: currentService?.id || 1,
                 service: selectedService, date: selectedDate, time: selectedSlot,
                 amount: price, platformFee, astrologerReceives,
                 status: 'upcoming',
@@ -257,6 +272,7 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance 
         setPaymentDone(true);
         onConfirm({
             astrologer: astro.name, astrologerId: astro.id,
+            serviceId: currentService?.id || 1,
             service: selectedService, date: selectedDate, time: selectedSlot,
             amount: price, platformFee, astrologerReceives,
             status: 'upcoming',

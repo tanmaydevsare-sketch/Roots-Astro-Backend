@@ -58,6 +58,10 @@ model AstrologerProfile {
   paypalEmail      String?
   paypalConnected   Boolean  @default(false)
 
+  buffer            String?  @default("30")
+  maxPerDay         String?  @default("5")
+  timezone          String?  @default("Asia/Kolkata (IST)")
+
   status        String   @default("PENDING_APPROVAL") // PENDING_APPROVAL, APPROVED, REJECTED
   services      Service[]
   bookings      Booking[]
@@ -286,4 +290,6 @@ model Availability {
   dayOfWeek    Int               // 0-6
   startTime    String
   endTime      String
+  breakStart   String?
+  breakEnd     String?
 }

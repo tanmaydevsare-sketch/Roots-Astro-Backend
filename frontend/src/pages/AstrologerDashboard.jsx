@@ -21,7 +21,7 @@ const computeSlots = (dayConfig, buffer, service) => {
     if (!dayConfig.available) return [];
     const { start, end, breakStart, breakEnd } = dayConfig;
     const dur = parseInt(service?.duration || 45);
-    const buf = parseInt(buffer) || 30;
+    const buf = isNaN(parseInt(buffer)) ? 30 : parseInt(buffer);
     const slots = [];
     let cur = timeToMin(start);
     const endM = timeToMin(end);
@@ -280,6 +280,37 @@ const AstrologerDashboard = ({ user, onUserUpdate }) => {
                         rating: data.rating || 5.0,
                         isPasswordSet: data.user?.isPasswordSet || false
                     });
+
+                    if (data.availability && data.availability.length > 0) {
+                        const newSched = { ...INIT_WEEKLY };
+                        DAYS_OF_WEEK.forEach((d, idx) => {
+                            const dbItem = data.availability.find(av => av.dayOfWeek === idx);
+                            if (dbItem) {
+                                newSched[d] = {
+                                    available: true,
+                                    start: dbItem.startTime,
+                                    end: dbItem.endTime,
+                                    breakStart: dbItem.breakStart || '',
+                                    breakEnd: dbItem.breakEnd || ''
+                                };
+                            } else {
+                                newSched[d] = {
+                                    available: false,
+                                    start: '09:00',
+                                    end: '18:00',
+                                    breakStart: '13:00',
+                                    breakEnd: '14:00'
+                                };
+                            }
+                        });
+                        setWeeklySchedule(newSched);
+                    }
+
+                    setSchedConfig({
+                        buffer: data.buffer || '30',
+                        maxPerDay: data.maxPerDay || '5',
+                        timezone: data.timezone || 'Asia/Kolkata (IST)'
+                    });
                 }
             } catch (err) { console.error("Fetch profile failed", err); }
         };
@@ -411,7 +442,12 @@ const AstrologerDashboard = ({ user, onUserUpdate }) => {
             const res = await fetch(`${API_URL}/api/astrologers/schedule/update`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ schedule: weeklySchedule })
+                body: JSON.stringify({ 
+                    schedule: weeklySchedule,
+                    buffer: schedConfig.buffer,
+                    maxPerDay: schedConfig.maxPerDay,
+                    timezone: schedConfig.timezone
+                })
             });
             if (res.ok) {
                 setScheduleSaved(true);

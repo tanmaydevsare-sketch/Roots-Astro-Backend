@@ -77,7 +77,10 @@ router.get('/profile/me', authMiddleware, roleMiddleware(['ASTROLOGER']), async 
     try {
         const profile = await prisma.astrologerProfile.findUnique({
             where: { userId: req.user.id },
-            include: { user: true }
+            include: { 
+                user: true,
+                availability: true
+            }
         });
         if (!profile) return res.status(404).json({ error: 'Profile not found' });
         res.json(profile);
@@ -273,10 +276,20 @@ router.patch('/admin/reject/:id', authMiddleware, roleMiddleware(['ADMIN']), asy
  *       - bearerAuth: []
  */
 router.patch('/schedule/update', authMiddleware, roleMiddleware(['ASTROLOGER']), async (req, res) => {
-    const { schedule } = req.body; 
+    const { schedule, buffer, maxPerDay, timezone } = req.body; 
     try {
         const profile = await prisma.astrologerProfile.findUnique({ where: { userId: req.user.id } });
         if (!profile) return res.status(404).json({ error: 'Profile not found' });
+
+        // Update profile preferences
+        await prisma.astrologerProfile.update({
+            where: { id: profile.id },
+            data: {
+                buffer: buffer !== undefined ? String(buffer) : undefined,
+                maxPerDay: maxPerDay !== undefined ? String(maxPerDay) : undefined,
+                timezone: timezone !== undefined ? String(timezone) : undefined
+            }
+        });
 
         const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
         
@@ -290,7 +303,9 @@ router.patch('/schedule/update', authMiddleware, roleMiddleware(['ASTROLOGER']),
                     profileId: profile.id,
                     dayOfWeek: index,
                     startTime: config.start,
-                    endTime: config.end
+                    endTime: config.end,
+                    breakStart: config.breakStart || null,
+                    breakEnd: config.breakEnd || null
                 });
             }
         });
