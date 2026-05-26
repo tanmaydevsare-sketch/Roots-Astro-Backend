@@ -110,6 +110,40 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance 
     const [paymentDone, setPaymentDone] = React.useState(false);
     const [paymentRef, setPaymentRef] = React.useState('');
 
+    const slots = React.useMemo(() => {
+        if (astro?.slots && astro.slots.length > 0) {
+            return astro.slots;
+        }
+        
+        const availList = astro?.astrologerProfile?.availability || [];
+        if (availList.length > 0) {
+            const computedSlots = [];
+            availList.forEach(av => {
+                let startHour = 9;
+                let endHour = 17;
+                
+                if (av.startTime && av.startTime.includes(':')) {
+                    const parts = av.startTime.split(':');
+                    startHour = parseInt(parts[0]) || 9;
+                }
+                if (av.endTime && av.endTime.includes(':')) {
+                    const parts = av.endTime.split(':');
+                    endHour = parseInt(parts[0]) || 17;
+                }
+                
+                for (let h = startHour; h <= endHour; h++) {
+                    const displayHour = h % 12 === 0 ? 12 : h % 12;
+                    const ampm = h >= 12 ? 'PM' : 'AM';
+                    computedSlots.push(`${displayHour}:00 ${ampm}`);
+                }
+            });
+            const uniqueSlots = Array.from(new Set(computedSlots));
+            if (uniqueSlots.length > 0) return uniqueSlots;
+        }
+        
+        return ['9:00 AM', '10:00 AM', '11:00 AM', '1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM'];
+    }, [astro]);
+
     const services = astro?.astrologerProfile?.services?.length > 0
         ? astro.astrologerProfile.services.map(s => ({
             id: s.id,
@@ -253,7 +287,7 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance 
                     {selectedDate && <>
                         <p className="wizard-label mt-lg">Available time slots</p>
                         <div className="slot-grid">
-                            {(astro?.slots || []).map(slot => <button key={slot} className={`slot-btn ${selectedSlot === slot ? 'selected' : ''}`} onClick={() => setSelectedSlot(slot)}>{slot}</button>)}
+                            {slots.map(slot => <button key={slot} className={`slot-btn ${selectedSlot === slot ? 'selected' : ''}`} onClick={() => setSelectedSlot(slot)}>{slot}</button>)}
                         </div>
                     </>}
                     <div className="wizard-actions">
@@ -283,7 +317,7 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance 
             )}
 
             {/* Step 4 – Payment */}
-            {step === 4 && (
+            {step === 4 && !paymentDone && (
                 <div className="fade-in">
                     {/* Order summary */}
                     <div className="booking-summary" style={{ marginBottom: '1.25rem' }}>

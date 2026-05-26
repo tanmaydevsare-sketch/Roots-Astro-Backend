@@ -122,15 +122,17 @@ router.post('/create', authMiddleware, roleMiddleware(['CLIENT']), async (req, r
                 serviceId: parseInt(serviceId),
                 scheduledAt: new Date(scheduledAt),
                 amount: parseFloat(amount),
-                status: 'PENDING_PAYMENT'
+                status: 'UPCOMING',
+                zoomMeetingUrl: `https://zoom.us/j/${Math.floor(Math.random() * 9000000000) + 1000000000}`
             }
         });
         
         const paymentLink = `https://mock-stripe-checkout.com/pay/${booking.id}`;
 
         res.status(201).json({ 
-            message: 'Booking initiated. Complete payment to confirm.',
+            message: 'Booking confirmed successfully.',
             bookingId: booking.id,
+            booking: booking,
             paymentUrl: paymentLink
         });
     } catch (error) {
