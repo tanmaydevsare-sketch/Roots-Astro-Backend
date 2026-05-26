@@ -116,33 +116,56 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance 
         }
         
         const availList = astro?.astrologerProfile?.availability || [];
-        if (availList.length > 0) {
-            const computedSlots = [];
-            availList.forEach(av => {
-                let startHour = 9;
-                let endHour = 17;
+        if (availList.length > 0 && selectedDate) {
+            const dateObj = new Date(selectedDate);
+            const jsDay = dateObj.getDay();
+            const dbDayIndex = jsDay === 0 ? 6 : jsDay - 1;
+            
+            const dayAvails = availList.filter(av => av.dayOfWeek === dbDayIndex);
+            
+            if (dayAvails.length > 0) {
+                const computedSlots = [];
+                dayAvails.forEach(av => {
+                    let startHour = 9;
+                    let endHour = 17;
+                    
+                    if (av.startTime) {
+                        const cleanStart = av.startTime.toUpperCase();
+                        let hour = parseInt(cleanStart.split(':')[0]) || 9;
+                        if (cleanStart.includes('PM') && hour !== 12) {
+                            hour += 12;
+                        } else if (cleanStart.includes('AM') && hour === 12) {
+                            hour = 0;
+                        }
+                        startHour = hour;
+                    }
+                    if (av.endTime) {
+                        const cleanEnd = av.endTime.toUpperCase();
+                        let hour = parseInt(cleanEnd.split(':')[0]) || 17;
+                        if (cleanEnd.includes('PM') && hour !== 12) {
+                            hour += 12;
+                        } else if (cleanEnd.includes('AM') && hour === 12) {
+                            hour = 0;
+                        }
+                        endHour = hour - 1;
+                    }
+                    
+                    for (let h = startHour; h <= endHour; h++) {
+                        if (h === 13) continue; // Skip 1:00 PM break hour
+                        
+                        const displayHour = h % 12 === 0 ? 12 : h % 12;
+                        const ampm = h >= 12 ? 'PM' : 'AM';
+                        computedSlots.push(`${displayHour}:00 ${ampm}`);
+                    }
+                });
                 
-                if (av.startTime && av.startTime.includes(':')) {
-                    const parts = av.startTime.split(':');
-                    startHour = parseInt(parts[0]) || 9;
-                }
-                if (av.endTime && av.endTime.includes(':')) {
-                    const parts = av.endTime.split(':');
-                    endHour = parseInt(parts[0]) || 17;
-                }
-                
-                for (let h = startHour; h <= endHour; h++) {
-                    const displayHour = h % 12 === 0 ? 12 : h % 12;
-                    const ampm = h >= 12 ? 'PM' : 'AM';
-                    computedSlots.push(`${displayHour}:00 ${ampm}`);
-                }
-            });
-            const uniqueSlots = Array.from(new Set(computedSlots));
-            if (uniqueSlots.length > 0) return uniqueSlots;
+                const uniqueSlots = Array.from(new Set(computedSlots));
+                if (uniqueSlots.length > 0) return uniqueSlots;
+            }
         }
         
-        return ['9:00 AM', '10:00 AM', '11:00 AM', '1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM'];
-    }, [astro]);
+        return ['9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM'];
+    }, [astro, selectedDate]);
 
     const services = astro?.astrologerProfile?.services?.length > 0
         ? astro.astrologerProfile.services.map(s => ({
