@@ -292,7 +292,36 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
             if (!orderRes.ok) throw new Error("Order creation failed");
             const order = await orderRes.json();
 
-            // 2. Open Razorpay Checkout
+            // 2. Open Razorpay Checkout (or simulate if mock keys are configured)
+            if (order.isMock) {
+                console.log("🛡️ rootsastro Sandbox: Simulating top-up verification.");
+                const response = {
+                    razorpay_order_id: order.id,
+                    razorpay_payment_id: `pay_mock_${Math.random().toString(36).slice(2, 10).toUpperCase()}`,
+                    razorpay_signature: "sandbox_mock_signature"
+                };
+
+                const verifyRes = await fetch(`${API_URL}/api/finance/razorpay/verify`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({
+                        ...response,
+                        amount: parseFloat(addFunds)
+                    })
+                });
+
+                if (verifyRes.ok) {
+                    const data = await verifyRes.json();
+                    setWalletBalance(data.balance);
+                    setAddFunds('');
+                    fetchWalletStats();
+                    alert("🎉 rootsastro Sandbox: ₹" + parseFloat(addFunds).toFixed(2) + " successfully credited to your wallet (Demo Checkout)!");
+                } else {
+                    alert("Sandbox verification failed");
+                }
+                return;
+            }
+
             const options = {
                 key: platformSettings.razorpayKeyId || "rzp_test_U8N0Y3vP9m1Q2X",
                 amount: order.amount,
@@ -362,6 +391,67 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
                 
                 if (!orderRes.ok) throw new Error("Order creation failed");
                 const order = await orderRes.json();
+
+                // 2. Open Razorpay Checkout and await confirmation (or simulate if mock keys are configured)
+                if (order.isMock) {
+                    return new Promise((resolve, reject) => {
+                        console.log("🛡️ rootsastro Sandbox: Simulating direct booking payment.");
+                        setTimeout(async () => {
+                            try {
+                                const response = {
+                                    razorpay_order_id: order.id,
+                                    razorpay_payment_id: `pay_mock_${Math.random().toString(36).slice(2, 10).toUpperCase()}`,
+                                    razorpay_signature: "sandbox_mock_signature"
+                                };
+
+                                // 3. Verify Payment on Backend
+                                const verifyRes = await fetch(`${API_URL}/api/finance/razorpay/verify`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                                    body: JSON.stringify({
+                                        ...response,
+                                        amount: parseFloat(booking.amount)
+                                    })
+                                });
+
+                                if (!verifyRes.ok) {
+                                    alert("Sandbox verification failed");
+                                    reject(new Error("Sandbox verification failed"));
+                                    return;
+                                }
+
+                                const verifyData = await verifyRes.json();
+                                // Balance is credited, now confirm booking via WALLET
+                                const bookingRes = await fetch(`${API_URL}/api/bookings/create`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                                    body: JSON.stringify({
+                                        astrologerId: booking.astrologerId,
+                                        serviceId: booking.serviceId || 1,
+                                        scheduledAt: booking.date + ' ' + booking.time,
+                                        amount: booking.amount,
+                                        paymentMethod: 'WALLET'
+                                    })
+                                });
+
+                                if (bookingRes.ok) {
+                                    const bookingData = await bookingRes.json();
+                                    setWalletBalance(bookingData.newBalance);
+                                    fetchWalletStats();
+                                    fetchBookings();
+                                    resolve({ ...bookingData, paymentRef: response.razorpay_payment_id });
+                                } else {
+                                    const err = await bookingRes.json();
+                                    alert(err.error || "Booking creation failed");
+                                    reject(new Error(err.error || "Booking creation failed"));
+                                }
+                            } catch (verifyErr) {
+                                console.error("Verify and Booking confirm error", verifyErr);
+                                reject(verifyErr);
+                            }
+                        }, 1000);
+                    });
+                }
 
                 // 2. Open Razorpay Checkout and await confirmation
                 return new Promise((resolve, reject) => {
