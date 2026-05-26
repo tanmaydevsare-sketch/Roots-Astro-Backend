@@ -93,7 +93,7 @@ const PreviewPanel = ({ previewDay, setPreviewDay, previewSlots, weeklySchedule,
 );
 
 const AstrologerDashboard = ({ user, onUserUpdate }) => {
-    const { currencySymbol, commissionRate = 0.25 } = useSettings();
+    const { currencySymbol, systemCurrency, commissionRate = 0.25 } = useSettings();
     const [searchParams, setSearchParams] = useSearchParams();
     const tab = searchParams.get('tab') || 'overview';
     const setTab = (t) => setSearchParams({ tab: t });
@@ -369,7 +369,7 @@ const AstrologerDashboard = ({ user, onUserUpdate }) => {
 
     /* ── Service CRUD ── */
     const openAddService = () => { setEditingService(null); setSvcForm({ name: '', duration: '45 min', price: '' }); setServiceModal(true); };
-    const openEditService = (s) => { setEditingService(s); setSvcForm({ name: s.name, duration: s.duration, price: String(s.price) }); setServiceModal(true); };
+    const openEditService = (s) => { setEditingService(s); setSvcForm({ name: s.name || s.title, duration: s.duration, price: String(s.price) }); setServiceModal(true); };
     const saveService = async () => {
         if (!svcForm.name || !svcForm.price) return;
         const token = localStorage.getItem('token');
@@ -586,7 +586,7 @@ const AstrologerDashboard = ({ user, onUserUpdate }) => {
                         </div>
                     )}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                        <FormField label="Price (USD)">
+                        <FormField label={`Price (${systemCurrency || 'USD'})`}>
                             <input className="form-input" type="number" value={newServiceForm.price} onChange={e => setNewServiceForm({ ...newServiceForm, price: e.target.value })} placeholder="0.00" />
                         </FormField>
                         <FormField label="Duration (Min)">
@@ -1188,7 +1188,7 @@ const AstrologerDashboard = ({ user, onUserUpdate }) => {
                             <tbody>
                                 {services.map(s => (
                                     <tr key={s.id}>
-                                        <td data-label="Service"><strong>{s.name}</strong></td>
+                                        <td data-label="Service"><strong>{s.name || s.title}</strong></td>
                                         <td data-label="Session Duration">
                                             <select className="form-input" style={{ padding: '0.4rem 0.6rem', width: 'auto' }}
                                                 value={serviceSchedule[s.id]?.duration || s.duration}

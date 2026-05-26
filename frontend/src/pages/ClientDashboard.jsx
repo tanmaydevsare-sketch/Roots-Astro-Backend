@@ -72,6 +72,7 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
     const [walletLoading, setWalletLoading] = useState(true);
     const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
     const [bookingTarget, setBookingTarget] = useState(null);
+    const [bookingService, setBookingService] = useState(null);
     const [bookingOpen, setBookingOpen] = useState(false);
     const [activeChat, setActiveChat] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
@@ -82,6 +83,7 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
     const [profileError, setProfileError] = useState('');
     const [profileLoading, setProfileLoading] = useState(false);
     const [serviceFilter, setServiceFilter] = useState('all');
+    const [categories, setCategories] = useState([]);
     const [viewMode, setViewMode] = useState('grid');
     const [selectedAstro, setSelectedAstro] = useState(null);
     const [zodiacSign, setZodiacSign] = useState('Leo');
@@ -151,6 +153,7 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
         fetchWalletStats();
         fetchBookings();
         fetchAstrologers();
+        fetchCategories();
 
         // Load Razorpay Script
         const script = document.createElement('script');
@@ -258,6 +261,18 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
         }
     };
 
+    const fetchCategories = async () => {
+        try {
+            const res = await fetch(`${API_URL}/api/admin/categories`);
+            if (res.ok) {
+                const data = await res.json();
+                setCategories(data || []);
+            }
+        } catch (err) {
+            console.error("Failed to fetch categories", err);
+        }
+    };
+
     const handleAddFunds = async () => {
         if (!addFunds || isNaN(addFunds)) return;
         if (!window.Razorpay) {
@@ -327,7 +342,7 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
     const pendingNotifications = notifications.filter(n => n.status === 'pending');
     const unreadCount = pendingNotifications.length;
 
-    const handleBook = (astro) => { setBookingTarget(astro); setBookingOpen(true); };
+    const handleBook = (astro, service = null) => { setBookingTarget(astro); setBookingService(service); setBookingOpen(true); };
 
     const handleConfirmBooking = async (booking) => {
         const token = localStorage.getItem('token');
@@ -371,16 +386,21 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
 
     const handleDeclineReschedule = (notif) => {
         const booking = bookings.find(b => b.id === notif.bookingId);
+        const amountToRefund = booking ? Number(booking.amount) : Number(notif.amount) || 0;
+        const serviceName = booking ? booking.service : (notif.service || 'Service');
+
         if (booking) {
             setBookings(prev => prev.map(b => b.id === notif.bookingId ? { ...b, status: 'cancelled' } : b));
-            setWalletBalance(prev => prev + booking.amount);
-            setTransactions(prev => [{
-                id: Date.now(),
-                desc: `Refund – Reschedule declined (${booking.service})`,
-                amount: `+${currencySymbol}${booking.amount.toFixed(2)}`,
-                date: 'Mar 3, 2026', type: 'credit'
-            }, ...prev]);
         }
+        
+        setWalletBalance(prev => prev + amountToRefund);
+        setTransactions(prev => [{
+            id: Date.now(),
+            desc: `Refund – Reschedule declined (${serviceName})`,
+            amount: `+${currencySymbol}${amountToRefund.toFixed(2)}`,
+            date: 'Mar 3, 2026', type: 'credit'
+        }, ...prev]);
+
         setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, status: 'declined' } : n));
     };
 
@@ -490,7 +510,14 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
     const filteredAstros = astrologers.filter(a => {
         const matchesSearch = a.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
             a.expertise.some(e => e.toLowerCase().includes(searchQuery.toLowerCase()));
-        const matchesService = serviceFilter === 'all' || a.expertise.some(e => e.toLowerCase().includes(serviceFilter.toLowerCase()));
+        const matchesService = serviceFilter === 'all' || 
+            a.expertise.some(e => e.toLowerCase().includes(serviceFilter.toLowerCase())) ||
+            (a.astrologerProfile?.services && a.astrologerProfile.services.some(s => {
+                const titleMatch = s.title.toLowerCase().includes(serviceFilter.toLowerCase());
+                const categoryMatch = s.masterService?.category?.name?.toLowerCase().includes(serviceFilter.toLowerCase());
+                const masterMatch = s.masterService?.name?.toLowerCase().includes(serviceFilter.toLowerCase());
+                return titleMatch || categoryMatch || masterMatch;
+            }));
         return matchesSearch && matchesService;
     });
 
@@ -510,7 +537,7 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
 
     return (
         <DashboardLayout sidebar={sidebar}>
-            <BookingModal astro={bookingTarget} isOpen={bookingOpen} onClose={() => setBookingOpen(false)} onConfirm={handleConfirmBooking} walletBalance={walletBalance} />
+            <BookingModal astro={bookingTarget} isOpen={bookingOpen} onClose={() => setBookingOpen(false)} onConfirm={handleConfirmBooking} walletBalance={walletBalance} defaultService={bookingService} />
 
             <Modal isOpen={passwordModal} onClose={() => { setPasswordModal(false); setPasswordError(''); setPasswordSuccess(false); }} title={profile.isPasswordSet ? "Change Password" : "Set Account Password"} width="440px">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
@@ -692,6 +719,28 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
                             </div>
 
                             <div className="profile-section">
+                                <h4>Offered Services</h4>
+                                {selectedAstro.astrologerProfile?.services && selectedAstro.astrologerProfile.services.length > 0 ? (
+                                    <div className="services-list" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.5rem' }}>
+                                        {selectedAstro.astrologerProfile.services.map(svc => (
+                                            <div key={svc.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', border: '1px solid var(--border-light)', borderRadius: '12px', background: 'var(--surface-color)' }}>
+                                                <div>
+                                                    <strong style={{ display: 'block', fontSize: '1.1rem', marginBottom: '0.25rem' }}>{svc.title}</strong>
+                                                    <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>{svc.duration} mins • {svc.type}</p>
+                                                    {svc.description && <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.9rem', color: 'var(--text-color)' }}>{svc.description}</p>}
+                                                </div>
+                                                <button className="btn btn-outline btn-sm" onClick={() => { setSelectedAstro(null); handleBook(selectedAstro, svc); }} style={{ whiteSpace: 'nowrap', marginLeft: '1rem' }}>
+                                                    Book {currencySymbol}{svc.price}
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="profile-bio" style={{ marginTop: '0.5rem' }}>No custom services posted.</p>
+                                )}
+                            </div>
+
+                            <div className="profile-section" style={{ marginTop: '1.5rem' }}>
                                 <h4>Client Reviews</h4>
                                 <div className="reviews-list">
                                     {TESTIMONIALS.slice(0, 3).map((t, i) => (
@@ -710,7 +759,7 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
                         </div>
 
                         <div className="modal-footer" style={{ marginTop: '2rem' }}>
-                            <button className="btn btn-primary btn-block" onClick={() => { setSelectedAstro(null); handleBook(selectedAstro); }}>Book a Session — {currencySymbol}{selectedAstro.rate}</button>
+                            <button className="btn btn-primary btn-block" onClick={() => { setSelectedAstro(null); handleBook(selectedAstro); }}>Book Generic Session — {currencySymbol}{selectedAstro.rate}</button>
                         </div>
                     </div>
                 )}
@@ -856,12 +905,14 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
                             </div>
 
                             {n.status === 'pending' && (
-                                <div className="notif-actions">
+                                <div className="notif-actions" style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '1rem' }}>
                                     <div className="fee-transparency-note" style={{ flex: 1, margin: 0 }}>
-                                        <span>If you decline, you will receive a full refund of <strong>{currencySymbol}{n.amount.toFixed(2)}</strong> to your wallet immediately.</span>
+                                        <span>If you decline, you will receive a full refund of <strong>{currencySymbol}{Number(n.amount).toFixed(2)}</strong> to your wallet immediately.</span>
                                     </div>
-                                    <button className="btn btn-primary btn-sm" onClick={() => handleAcceptReschedule(n)}>Accept Change</button>
-                                    <button className="btn btn-outline btn-sm" style={{ borderColor: '#ff6b6b', color: '#ff6b6b' }} onClick={() => handleDeclineReschedule(n)}>Decline & Refund</button>
+                                    <div style={{ display: 'flex', gap: '0.75rem' }}>
+                                        <button className="btn btn-primary btn-sm" onClick={() => handleAcceptReschedule(n)}>Accept Change</button>
+                                        <button className="btn btn-outline btn-sm" style={{ borderColor: '#ff6b6b', color: '#ff6b6b' }} onClick={() => handleDeclineReschedule(n)}>Decline & Refund</button>
+                                    </div>
                                 </div>
                             )}
 
@@ -869,7 +920,7 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
                                 <p style={{ color: '#1cc88a', fontSize: '0.88rem', marginTop: '0.75rem' }}>✓ You accepted this reschedule. Your booking has been updated.</p>
                             )}
                             {n.status === 'declined' && (
-                                <p style={{ color: '#ff6b6b', fontSize: '0.88rem', marginTop: '0.75rem' }}>✗ You declined. A full refund of {currencySymbol}{n.amount.toFixed(2)} has been added to your wallet.</p>
+                                <p style={{ color: '#ff6b6b', fontSize: '0.88rem', marginTop: '0.75rem' }}>✗ You declined. A full refund of {currencySymbol}{Number(n.amount).toFixed(2)} has been added to your wallet.</p>
                             )}
                         </div>
                     ))}
@@ -898,8 +949,8 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
 
                     <div className="filter-shelf mb-lg">
                         <button className={`filter-tag ${serviceFilter === 'all' ? 'active' : ''}`} onClick={() => setServiceFilter('all')}>All Services</button>
-                        {PLATFORM_SERVICES.map(s => (
-                            <button key={s.id} className={`filter-tag ${serviceFilter === s.name ? 'active' : ''}`} onClick={() => setServiceFilter(s.name)}>{s.name}</button>
+                        {categories.map(c => (
+                            <button key={c.id} className={`filter-tag ${serviceFilter === c.name ? 'active' : ''}`} onClick={() => setServiceFilter(c.name)}>{c.name}</button>
                         ))}
                     </div>
 
@@ -1008,11 +1059,11 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
                                         <div className="booking-details-col">
                                             <div className="booking-price-tag">
                                                 <span className="label">Amount Paid</span>
-                                                <span className="value">{currencySymbol}{b.amount.toFixed(2)}</span>
+                                                <span className="value">{currencySymbol}{Number(b.amount).toFixed(2)}</span>
                                             </div>
                                             <div className="fee-breakdown">
-                                                <span>Platform: {currencySymbol}{b.platformFee.toFixed(2)}</span>
-                                                <span>Astro: {currencySymbol}{b.astrologerReceives.toFixed(2)}</span>
+                                                <span>Platform: {currencySymbol}{Number(b.platformFee).toFixed(2)}</span>
+                                                <span>Astro: {currencySymbol}{Number(b.astrologerReceives).toFixed(2)}</span>
                                             </div>
                                         </div>
 

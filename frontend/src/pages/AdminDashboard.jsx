@@ -1571,7 +1571,27 @@ const AdminDashboard = ({ user }) => {
                                 <FormField label="Client Secret"><input className="form-input" type="password" value={zoomCreds.clientSecret} onChange={e => setZoomCreds({ ...zoomCreds, clientSecret: e.target.value })} placeholder="Zoom Secret Key" /></FormField>
                             </div>
                             <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-                                <button className="btn btn-outline btn-sm" onClick={() => { setZoomStatus('checking'); setTimeout(() => setZoomStatus('connected'), 1500); }}><Wifi size={14} /> Verify API Connection</button>
+                                <button className="btn btn-outline btn-sm" onClick={async () => {
+                                    setZoomStatus('checking');
+                                    const token = localStorage.getItem('token');
+                                    try {
+                                        const res = await fetch(`${API_URL}/api/settings/admin/zoom/verify`, {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                                            body: JSON.stringify(zoomCreds)
+                                        });
+                                        const data = await res.json();
+                                        if (data.verified) {
+                                            setZoomStatus('connected');
+                                        } else {
+                                            setZoomStatus('error');
+                                            alert(data.error || 'Connection failed.');
+                                        }
+                                    } catch (err) {
+                                        setZoomStatus('error');
+                                        alert('Verification failed: ' + err.message);
+                                    }
+                                }}><Wifi size={14} /> Verify API Connection</button>
                             </div>
                         </div>
                     )}

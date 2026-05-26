@@ -105,15 +105,17 @@ router.post('/razorpay/order', authMiddleware, async (req, res) => {
     try {
         if (!amount || amount <= 0) return res.status(400).json({ error: 'Invalid amount' });
 
-        const options = {
-            amount: Math.round(amount * 100), // amount in the smallest currency unit (paise)
-            currency: "INR",
-            receipt: `receipt_${Date.now()}`,
-        };
-
         // Load active configuration keys dynamically from database in real-time
         const RazorpayPackage = require('razorpay');
         const settings = await prisma.globalSettings.findUnique({ where: { id: 1 } });
+        const currencyCode = settings?.systemCurrency || "USD";
+
+        const options = {
+            amount: Math.round(amount * 100), // amount in the smallest currency unit
+            currency: currencyCode,
+            receipt: `receipt_${Date.now()}`,
+        };
+
         const keyId = settings?.razorpayKeyId || process.env.RAZORPAY_KEY_ID || 'rzp_test_xxxxxxx';
         const keySecret = settings?.razorpayKeySecret || process.env.RAZORPAY_KEY_SECRET || 'xxxxxxx';
         

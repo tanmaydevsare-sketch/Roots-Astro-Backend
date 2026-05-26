@@ -80,8 +80,8 @@ export const AstrologerCard = ({ astro, onBook, hideRate = false }) => {
                     {!hideRate && <span className="astro-rate">{currencySymbol}{astro.rate}<small>/min</small></span>}
                     <p className="astro-sessions">{astro.sessions.toLocaleString()} sessions</p>
                 </div>
-                <button className={`btn btn-sm ${astro.available ? 'btn-primary' : 'btn-disabled'}`} onClick={() => astro.available && onBook(astro)} disabled={!astro.available}>
-                    {astro.available ? 'Book Now' : 'Unavailable'}
+                <button className="btn btn-sm btn-primary" onClick={() => onBook(astro)}>
+                    View Profile
                 </button>
             </div>
         </div>
@@ -89,10 +89,19 @@ export const AstrologerCard = ({ astro, onBook, hideRate = false }) => {
 };
 
 /* ─── Booking Wizard (5 steps: Service → Date/Time → Problem → Pay → Receipt) ─── */
-export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance = 0 }) => {
+export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance = 0, defaultService = null }) => {
     const { currencySymbol, commissionRate = 0.25 } = useSettings();
     const [step, setStep] = React.useState(1);
     const [selectedService, setSelectedService] = React.useState('');
+
+    React.useEffect(() => {
+        if (isOpen && defaultService) {
+            setSelectedService(defaultService.title || defaultService.name || '');
+        } else if (isOpen) {
+            setSelectedService('');
+        }
+    }, [isOpen, defaultService]);
+
     const [selectedDate, setSelectedDate] = React.useState('');
     const [selectedSlot, setSelectedSlot] = React.useState('');
     const [problemText, setProblemText] = React.useState('');
@@ -113,7 +122,7 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance 
             { id: 2, name: 'Relationship Compatibility', duration: '60 min', price: astro.rate + 25 },
             { id: 3, name: 'Career & Finance Forecast', duration: '30 min', price: Math.max(30, astro.rate - 10) },
           ] : [];
-    const dates = ['Mar 5, 2026', 'Mar 6, 2026', 'Mar 7, 2026', 'Mar 8, 2026', 'Mar 10, 2026'];
+    const dates = Array.from({length: 5}, (_, i) => { const d = new Date(); d.setDate(d.getDate() + i); return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); });
     const currentService = services.find(s => s.name === selectedService);
     const price = currentService?.price || 0;
     const platformFee = +(price * commissionRate).toFixed(2);

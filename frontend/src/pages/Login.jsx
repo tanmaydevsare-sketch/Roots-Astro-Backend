@@ -6,7 +6,7 @@ import { auth } from '../firebase';
 import API_URL from '../api/config';
 
 const PORTALS = {
-    CLIENT: { id: 'CLIENT', title: 'Consult Your Destiny', icon: <User size={22} />, color: '#D4AF37', redirect: '/client' },
+    CLIENT: { id: 'CLIENT', title: 'Unlock Your Cosmic Journey', icon: <User size={22} />, color: '#D4AF37', redirect: '/client' },
     ASTROLOGER: { id: 'ASTROLOGER', title: 'Astrologer Portal', icon: <Star size={22} />, color: '#B08D57', redirect: '/astrologer' },
     WRITER: { id: 'WRITER', title: 'Writer Dashboard', icon: <Edit3 size={22} />, color: '#9B6B6B', redirect: '/writer' },
     ADMIN: { id: 'ADMIN', title: 'Platform Control', icon: <Shield size={22} />, color: '#6B90B0', redirect: '/admin' }
@@ -126,18 +126,14 @@ const Login = ({ onLogin, portal = 'CLIENT' }) => {
     return (
         <div className="login-page">
             <div className="login-left">
-                <div className="login-brand">
-                    <img src="/logo.png" alt="Logo" className="brand-logo-img" style={{ height: '38px', objectFit: 'contain' }} />
-                    <span className="brand-text">Roots <span className="brand-accent">Astro</span></span>
-                </div>
                 <div className="fade-in">
                     <h1 className="login-headline">
-                        {portal === 'CLIENT' ? 'Your Cosmic Destiny Starts Here.' : 
+                        {portal === 'CLIENT' ? 'Your Cosmic Journey Begins Here.' : 
                          portal === 'ASTROLOGER' ? 'Empowering Your Practice.' : 
                          portal === 'WRITER' ? 'Share Your Cosmic Insights.' : 'Master Platform Oversight.'}
                     </h1>
                     <p className="login-sub">
-                        Connect with top-tier astrologers through the world's most secure and advanced tele-consultation platform.
+                        Connect with trusted astrologers through a seamless and secure spiritual consultation platform.
                     </p>
                     <div className="login-features">
                         {[

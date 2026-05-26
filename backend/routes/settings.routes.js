@@ -141,6 +141,43 @@ router.patch('/admin/global', authMiddleware, roleMiddleware(['SUPERADMIN', 'ADM
 
 /**
  * @swagger
+ * /api/settings/admin/zoom/verify:
+ *   post:
+ *     tags: [Settings]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.post('/admin/zoom/verify', authMiddleware, roleMiddleware(['SUPERADMIN', 'ADMIN']), async (req, res) => {
+    const { accountId, clientId, clientSecret } = req.body;
+    if (!accountId || !clientId || !clientSecret) {
+        return res.status(400).json({ verified: false, error: 'Account ID, Client ID, and Client Secret are required' });
+    }
+    try {
+        const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+        const response = await fetch(`https://zoom.us/oauth/token?grant_type=account_credentials&account_id=${accountId}`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Basic ${credentials}`
+            }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            if (data.access_token) {
+                res.json({ verified: true, message: 'Successfully connected to Zoom API' });
+            } else {
+                res.status(400).json({ verified: false, error: 'Failed to retrieve access token' });
+            }
+        } else {
+            res.status(400).json({ verified: false, error: `Invalid credentials: ${response.statusText}` });
+        }
+    } catch (error) {
+        res.status(500).json({ verified: false, error: error.message });
+    }
+});
+
+/**
+ * @swagger
  * /api/settings/admin/bank:
  *   patch:
  *     tags: [Settings]

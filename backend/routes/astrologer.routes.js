@@ -36,7 +36,15 @@ router.get('/', async (req, res) => {
             include: {
                 astrologerProfile: {
                     include: {
-                        services: true,
+                        services: {
+                            include: {
+                                masterService: {
+                                    include: {
+                                        category: true
+                                    }
+                                }
+                            }
+                        },
                         availability: true,
                         reviews: true
                     }
@@ -51,47 +59,6 @@ router.get('/', async (req, res) => {
         });
 
         res.json(results);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-/**
- * @swagger
- * /api/astrologers/{id}:
- *   get:
- *     tags: [Astrologers]
- *     summary: Get full profile of a specific astrologer by ID.
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema: { type: integer }
- *     responses:
- *       200: { description: Astrologer profile details }
- *       404: { description: Astrologer not found }
- */
-router.get('/:id', async (req, res) => {
-    try {
-        const astrologer = await prisma.user.findUnique({
-            where: { id: parseInt(req.params.id) },
-            include: {
-                astrologerProfile: {
-                    include: {
-                        services: true,
-                        availability: true,
-                        reviews: { include: { astrologer: true } }
-                    }
-                }
-            }
-        });
-        
-        if (!astrologer || astrologer.role !== 'ASTROLOGER') {
-            return res.status(404).json({ error: 'Astrologer not found' });
-        }
-
-        const { password, ...safeUser } = astrologer;
-        res.json(safeUser);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -386,7 +353,7 @@ router.post('/services', authMiddleware, roleMiddleware(['ASTROLOGER']), async (
                 duration: parseInt(duration) || 30,
                 type: type || 'CHAT'
             },
-            include: { masterService: true }
+            include: { masterService: { include: { category: true } } }
         });
         res.json(service);
     } catch (error) {
@@ -407,6 +374,55 @@ router.delete('/services/:id', authMiddleware, roleMiddleware(['ASTROLOGER']), a
         const profile = await prisma.astrologerProfile.findUnique({ where: { userId: req.user.id } });
         await prisma.service.deleteMany({ where: { id: parseInt(req.params.id), profileId: profile.id } });
         res.json({ message: 'Service deleted' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * @swagger
+ * /api/astrologers/{id}:
+ *   get:
+ *     tags: [Astrologers]
+ *     summary: Get full profile of a specific astrologer by ID.
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200: { description: Astrologer profile details }
+ *       404: { description: Astrologer not found }
+ */
+router.get('/:id', async (req, res) => {
+    try {
+        const astrologer = await prisma.user.findUnique({
+            where: { id: parseInt(req.params.id) },
+            include: {
+                astrologerProfile: {
+                    include: {
+                        services: {
+                            include: {
+                                masterService: {
+                                    include: {
+                                        category: true
+                                    }
+                                }
+                            }
+                        },
+                        availability: true,
+                        reviews: { include: { astrologer: true } }
+                    }
+                }
+            }
+        });
+        
+        if (!astrologer || astrologer.role !== 'ASTROLOGER') {
+            return res.status(404).json({ error: 'Astrologer not found' });
+        }
+
+        const { password, ...safeUser } = astrologer;
+        res.json(safeUser);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
