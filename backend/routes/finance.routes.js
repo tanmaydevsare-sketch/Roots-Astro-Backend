@@ -147,22 +147,8 @@ router.post('/razorpay/order', authMiddleware, async (req, res) => {
             const order = await dynamicRazorpay.orders.create(options);
             res.json(order);
         } catch (sdkError) {
-            console.warn("⚠️ Razorpay SDK Order Creation failed. Falling back to sandbox mock order. Error:", sdkError.message);
-            res.json({
-                id: `order_mock_${Math.random().toString(36).slice(2, 10)}`,
-                entity: "order",
-                amount: Math.round(amount * 100),
-                amount_paid: 0,
-                amount_due: Math.round(amount * 100),
-                currency: currencyCode,
-                receipt: options.receipt,
-                status: "created",
-                attempts: 0,
-                notes: [],
-                created_at: Math.floor(Date.now() / 1000),
-                isMock: true,
-                warning: "Authentication with Razorpay failed. Running in Sandbox Mock fallback mode."
-            });
+            console.error("⚠️ Razorpay SDK Order Creation failed. Error:", sdkError.message);
+            res.status(400).json({ error: "Failed to initialize Razorpay payment. Please verify your Razorpay API keys in Admin settings." });
         }
     } catch (error) {
         res.status(500).json({ error: error.message });

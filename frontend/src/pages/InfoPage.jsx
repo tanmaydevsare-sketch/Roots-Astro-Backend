@@ -77,7 +77,7 @@ const InfoPage = () => {
             </main>
 
             <footer style={{ textAlign: 'center', padding: '3rem 1rem', borderTop: '1px solid var(--glass-border)', marginTop: '4rem', background: 'rgba(0,0,0,0.1)' }}>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>&copy; 2026 Roots Astro. All rights reserved.</p>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', margin: 0 }}>Roots Astro is owned by NEBZA Technologies Private Limited. All rights reserved.</p>
                 <div style={{ display: 'flex', justifyContent: 'center', gap: '1.5rem', marginTop: '1rem' }}>
                     {Object.entries(pageMap).map(([key, value]) => (
                         <Link key={key} to={`/pages/${key}`} style={{ color: key === slug ? 'var(--secondary-color)' : 'var(--text-muted)', textDecoration: 'none', fontSize: '0.85rem' }}>

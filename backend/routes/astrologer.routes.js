@@ -358,6 +358,14 @@ router.post('/services', authMiddleware, roleMiddleware(['ASTROLOGER']), async (
         const ms = await prisma.masterService.findUnique({ where: { id: parseInt(masterServiceId) } });
         if (!ms) return res.status(404).json({ error: 'Master service not found' });
 
+        const existingService = await prisma.service.findFirst({
+            where: { profileId: profile.id, masterServiceId: ms.id }
+        });
+
+        if (existingService) {
+            return res.status(400).json({ error: 'This service is already added to your profile.' });
+        }
+
         const service = await prisma.service.create({
             data: { 
                 profileId: profile.id,

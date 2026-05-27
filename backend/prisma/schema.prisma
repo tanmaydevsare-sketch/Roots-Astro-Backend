@@ -108,6 +108,7 @@ model Booking {
   status          String            @default("BOOKED") // UPCOMING, IN_PROGRESS, COMPLETED, CANCELLED
   type            String            @default("CHAT")   // CHAT, VIDEO
   amount          Float
+  problemDesc     String?
   zoomMeetingUrl  String?
   recordingUrl    String?
   createdAt       DateTime          @default(now())

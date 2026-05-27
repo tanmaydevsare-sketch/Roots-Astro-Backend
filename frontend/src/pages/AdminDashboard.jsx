@@ -501,6 +501,14 @@ const AdminDashboard = ({ user }) => {
                         }
                     }));
                 }
+                
+                if (data.activeVideoProvider) setActiveVideoProvider(data.activeVideoProvider);
+                setZoomCreds({
+                    accountId: data.zoomAccountId || '',
+                    clientId: data.zoomClientId || '',
+                    clientSecret: data.zoomClientSecret || ''
+                });
+
                 if (data.commissionRate) setCommissionPct(data.commissionRate * 100);
             }
         } catch (err) { console.error("Global settings fetch failed:", err); }
@@ -603,6 +611,10 @@ const AdminDashboard = ({ user }) => {
                 adminBankName: bankDetails.bankName,
                 adminAccountNo: bankDetails.accountNumber,
                 adminIfsc: bankDetails.ifsc,
+                zoomAccountId: zoomCreds.accountId,
+                zoomClientId: zoomCreds.clientId,
+                zoomClientSecret: zoomCreds.clientSecret,
+                activeVideoProvider,
             };
 
             const res = await fetch(`${API_URL}/api/settings/admin/global`, {
@@ -1621,7 +1633,31 @@ const AdminDashboard = ({ user }) => {
                     )}
 
                     <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                        <button className="btn btn-primary" onClick={() => { setVideoSaved(true); setTimeout(() => setVideoSaved(false), 2500); }}>Apply Configuration</button>
+                        <button className="btn btn-primary" onClick={async () => {
+                            try {
+                                const token = localStorage.getItem('token');
+                                const payload = {
+                                    activeVideoProvider,
+                                    zoomAccountId: zoomCreds.accountId,
+                                    zoomClientId: zoomCreds.clientId,
+                                    zoomClientSecret: zoomCreds.clientSecret
+                                };
+                                const res = await fetch(`${API_URL}/api/settings/admin/global`, {
+                                    method: 'PATCH',
+                                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                                    body: JSON.stringify(payload)
+                                });
+                                if (res.ok) {
+                                    setVideoSaved(true); 
+                                    fetchGlobalSettings();
+                                    setTimeout(() => setVideoSaved(false), 2500);
+                                } else {
+                                    alert('Failed to save configuration');
+                                }
+                            } catch(err) {
+                                alert('Error saving: ' + err.message);
+                            }
+                        }}>Apply Configuration</button>
                         {videoSaved && <span style={{ color: '#1cc88a', fontWeight: 600 }}>✓ Settings updated successfully.</span>}
                     </div>
                 </div>

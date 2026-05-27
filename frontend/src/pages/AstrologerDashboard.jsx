@@ -502,9 +502,11 @@ const AstrologerDashboard = ({ user, onUserUpdate }) => {
                 body: JSON.stringify({ zoomMeetingUrl: link })
             });
             if (res.ok) {
-                setGeneratedLink(link);
+                const data = await res.json();
+                const actualLink = data.zoomMeetingUrl || link;
+                setGeneratedLink(actualLink);
                 setZoomGenerating(false);
-                setBookings(prev => prev.map(bk => bk.id === b.id ? { ...bk, zoomLink: link, status: 'IN_PROGRESS' } : bk));
+                setBookings(prev => prev.map(bk => bk.id === b.id ? { ...bk, zoomLink: actualLink, status: 'IN_PROGRESS' } : bk));
             }
         } catch (err) { 
             console.error("Start session failed", err);

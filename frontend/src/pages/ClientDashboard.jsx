@@ -234,7 +234,9 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
                     const rating = Number(prof.rating) || 5.0;
                     const reviewsCount = prof.reviews?.length || 0;
                     const name = `${u.firstName} ${u.lastName}`;
-                    const expertiseArray = prof.expertise ? prof.expertise.split(',').map(e => e.trim()).filter(Boolean) : ["Vedic Astrology"];
+                    const expertiseArray = (prof.services?.length > 0)
+                        ? Array.from(new Set(prof.services.map(s => s.masterService?.category?.name).filter(Boolean)))
+                        : (prof.expertise ? prof.expertise.split(',').map(e => e.trim()).filter(Boolean) : ["Vedic Astrology"]);
                     const languages = prof.languages || "English";
                     const bio = prof.bio || "Verified professional astrologer guidance.";
                     const rate = parseFloat(prof.rate || "50");
@@ -289,7 +291,10 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
                 body: JSON.stringify({ amount: parseFloat(addFunds) })
             });
             
-            if (!orderRes.ok) throw new Error("Order creation failed");
+            if (!orderRes.ok) {
+                const errData = await orderRes.json();
+                throw new Error(errData.error || "Order creation failed");
+            }
             const order = await orderRes.json();
 
             // 2. Open Razorpay Checkout (or simulate if mock keys are configured)
@@ -389,7 +394,10 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
                     body: JSON.stringify({ amount: parseFloat(booking.amount) })
                 });
                 
-                if (!orderRes.ok) throw new Error("Order creation failed");
+                if (!orderRes.ok) {
+                    const errData = await orderRes.json();
+                    throw new Error(errData.error || "Order creation failed");
+                }
                 const order = await orderRes.json();
 
                 // 2. Open Razorpay Checkout and await confirmation (or simulate if mock keys are configured)
@@ -430,6 +438,7 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
                                         serviceId: booking.serviceId || 1,
                                         scheduledAt: booking.date + ' ' + booking.time,
                                         amount: booking.amount,
+                                        problemDesc: booking.problemDescription || null,
                                         paymentMethod: 'WALLET'
                                     })
                                 });
@@ -490,6 +499,7 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
                                         serviceId: booking.serviceId || 1,
                                         scheduledAt: booking.date + ' ' + booking.time,
                                         amount: booking.amount,
+                                        problemDesc: booking.problemDescription || null,
                                         paymentMethod: 'WALLET'
                                     })
                                 });

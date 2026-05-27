@@ -77,7 +77,6 @@ export const AstrologerCard = ({ astro, onBook, hideRate = false }) => {
             <p className="astro-bio">{astro.bio}</p>
             <div className="astro-card-footer">
                 <div>
-                    {!hideRate && <span className="astro-rate">{currencySymbol}{astro.rate}<small>/min</small></span>}
                     <p className="astro-sessions">{astro.sessions.toLocaleString()} sessions</p>
                 </div>
                 <button className="btn btn-sm btn-primary" onClick={() => onBook(astro)}>
@@ -110,8 +109,14 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance 
     const [paymentDone, setPaymentDone] = React.useState(false);
     const [paymentRef, setPaymentRef] = React.useState('');
 
-    const services = astro?.astrologerProfile?.services?.length > 0
-        ? astro.astrologerProfile.services.map(s => ({
+    const uniqueServicesMap = new Map();
+    astro?.astrologerProfile?.services?.forEach(s => {
+        if (!uniqueServicesMap.has(s.title)) uniqueServicesMap.set(s.title, s);
+    });
+    const uniqueServices = Array.from(uniqueServicesMap.values());
+
+    const services = uniqueServices.length > 0
+        ? uniqueServices.map(s => ({
             id: s.id,
             name: s.title,
             duration: `${s.duration} min`,
@@ -136,62 +141,62 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance 
             
             const dayAvails = availList.filter(av => av.dayOfWeek === dbDayIndex);
             
-            if (dayAvails.length > 0) {
-                const parseTimeToMin = (t) => {
-                    if (!t) return null;
-                    t = t.trim().toUpperCase();
-                    if (t.includes(':')) {
-                        const parts = t.split(' ')[0].split(':');
-                        let h = parseInt(parts[0]) || 0;
-                        let m = parseInt(parts[1]) || 0;
-                        if (t.includes('PM') && h !== 12) {
-                            h += 12;
-                        } else if (t.includes('AM') && h === 12) {
-                            h = 0;
-                        }
-                        return h * 60 + m;
-                    }
-                    return null;
-                };
-
-                const minToTimeStr = (totalMin) => {
-                    let h = Math.floor(totalMin / 60);
-                    let m = totalMin % 60;
-                    const ampm = h >= 12 ? 'PM' : 'AM';
-                    const displayHour = h % 12 === 0 ? 12 : h % 12;
-                    return `${displayHour}:${String(m).padStart(2, '0')} ${ampm}`;
-                };
-
-                const computedSlots = [];
-                const currentService = services.find(s => s.name === selectedService);
-                const serviceDuration = currentService ? (parseInt(currentService.duration) || 30) : 30;
-                const bufferTime = astro?.astrologerProfile?.buffer ? (parseInt(astro.astrologerProfile.buffer) || 0) : 0;
-
-                dayAvails.forEach(av => {
-                    const startMin = parseTimeToMin(av.startTime) ?? 540;
-                    const endMin = parseTimeToMin(av.endTime) ?? 1080;
-                    const breakStartMin = av.breakStart ? parseTimeToMin(av.breakStart) : null;
-                    const breakEndMin = av.breakEnd ? parseTimeToMin(av.breakEnd) : null;
-
-                    let currentMin = startMin;
-                    while (currentMin + serviceDuration <= endMin) {
-                        const isBreak = breakStartMin !== null && breakEndMin !== null && 
-                                        (currentMin < breakEndMin && currentMin + serviceDuration > breakStartMin);
-                        if (isBreak) {
-                            currentMin = breakEndMin;
-                            continue;
-                        }
-                        computedSlots.push(minToTimeStr(currentMin));
-                        currentMin += serviceDuration + bufferTime;
-                    }
-                });
-                
-                const uniqueSlots = Array.from(new Set(computedSlots));
-                if (uniqueSlots.length > 0) return uniqueSlots;
+            if (dayAvails.length === 0) {
+                // If they have a schedule but this day is empty, it means they are unavailable
+                return [];
             }
+            
+            const parseTimeToMin = (t) => {
+                if (!t) return null;
+                t = t.trim().toUpperCase();
+                if (t.includes(':')) {
+                    const parts = t.split(' ')[0].split(':');
+                    let h = parseInt(parts[0]) || 0;
+                    let m = parseInt(parts[1]) || 0;
+                    if (t.includes('PM') && h !== 12) h += 12;
+                    else if (t.includes('AM') && h === 12) h = 0;
+                    return h * 60 + m;
+                }
+                return null;
+            };
+
+            const minToTimeStr = (totalMin) => {
+                let h = Math.floor(totalMin / 60);
+                let m = totalMin % 60;
+                const ampm = h >= 12 ? 'PM' : 'AM';
+                const displayHour = h % 12 === 0 ? 12 : h % 12;
+                return `${displayHour}:${String(m).padStart(2, '0')} ${ampm}`;
+            };
+
+            const computedSlots = [];
+            const currentService = services.find(s => s.name === selectedService);
+            const serviceDuration = currentService ? (parseInt(currentService.duration) || 30) : 30;
+            const bufferTime = astro?.astrologerProfile?.buffer ? (parseInt(astro.astrologerProfile.buffer) || 0) : 0;
+
+            dayAvails.forEach(av => {
+                const startMin = parseTimeToMin(av.startTime) ?? 540;
+                const endMin = parseTimeToMin(av.endTime) ?? 1080;
+                const breakStartMin = av.breakStart ? parseTimeToMin(av.breakStart) : null;
+                const breakEndMin = av.breakEnd ? parseTimeToMin(av.breakEnd) : null;
+
+                let currentMin = startMin;
+                while (currentMin + serviceDuration <= endMin) {
+                    const isBreak = breakStartMin !== null && breakEndMin !== null && 
+                                    (currentMin < breakEndMin && currentMin + serviceDuration > breakStartMin);
+                    if (isBreak) {
+                        currentMin = breakEndMin;
+                        continue;
+                    }
+                    computedSlots.push(minToTimeStr(currentMin));
+                    currentMin += serviceDuration + bufferTime;
+                }
+            });
+            
+            const uniqueSlots = Array.from(new Set(computedSlots));
+            return uniqueSlots; // Return computed slots (could be empty if no slots fit)
         }
         
-        return ['9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM'];
+        return selectedDate ? ['9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM'] : [];
     }, [astro, selectedDate, selectedService]);
     const dates = Array.from({length: 5}, (_, i) => { const d = new Date(); d.setDate(d.getDate() + i); return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); });
     const currentService = services.find(s => s.name === selectedService);
@@ -265,6 +270,7 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance 
                 setPaymentDone(true);
             } catch (err) {
                 console.error("Razorpay payment failed or was closed", err);
+                alert(err.message || "Payment failed or was cancelled.");
             } finally {
                 setPaymentProcessing(false);
             }

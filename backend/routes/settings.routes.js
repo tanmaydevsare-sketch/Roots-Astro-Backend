@@ -185,7 +185,7 @@ router.post('/admin/zoom/verify', authMiddleware, roleMiddleware(['SUPERADMIN', 
  *       - bearerAuth: []
  *   description: Legacy endpoint, redirects to global
  */
-router.patch('/admin/bank', authMiddleware, roleMiddleware(['ADMIN']), async (req, res) => {
+router.patch('/admin/bank', authMiddleware, roleMiddleware(['ADMIN', 'SUPERADMIN']), async (req, res) => {
     try {
         const settings = await prisma.globalSettings.upsert({
             where: { id: 1 },

@@ -406,6 +406,12 @@ const Signup = ({ onLogin }) => {
                         <button type="submit" disabled={loading} className="btn btn-primary btn-block" style={{ padding: '1rem', fontWeight: 700 }}>
                             Complete Onboarding
                         </button>
+
+                        <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'rgba(212,175,55,0.05)', borderRadius: '8px', border: '1px solid rgba(212,175,55,0.2)', textAlign: 'center' }}>
+                            <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-main)' }}>
+                                By signing up, you agree to our <strong>Terms and Conditions</strong> of using the platform.
+                            </p>
+                        </div>
                     </form>
                 )}
 

@@ -38,9 +38,11 @@ const Home = ({ view }) => {
                         const formatted = data.map(u => ({
                             id: u.id,
                             name: `${u.firstName} ${u.lastName}`.trim(),
-                            expertise: u.astrologerProfile?.expertise 
-                                ? u.astrologerProfile.expertise.split(',').map(s => s.trim()) 
-                                : ['Astrology'],
+                            expertise: (u.astrologerProfile?.services?.length > 0)
+                                ? Array.from(new Set(u.astrologerProfile.services.map(s => s.masterService?.category?.name).filter(Boolean)))
+                                : (u.astrologerProfile?.expertise 
+                                    ? u.astrologerProfile.expertise.split(',').map(s => s.trim()) 
+                                    : ['Astrology']),
                             rate: u.astrologerProfile?.rate || '50',
                             rating: u.astrologerProfile?.rating || 5.0,
                             available: u.astrologerProfile?.isOnline ?? false
@@ -75,6 +77,11 @@ const Home = ({ view }) => {
                                     <strong className="gold-text">{v}</strong><span>{l}</span>
                                 </div>
                             ))}
+                        </div>
+                        <div style={{ marginTop: '2.5rem', display: 'inline-flex', alignItems: 'center', background: 'rgba(0,0,0,0.4)', padding: '0.75rem 1.25rem', borderRadius: '50px', border: '1px solid var(--secondary-color)' }}>
+                            <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-main)', fontWeight: 500 }}>
+                                Roots Astro is owned by <span style={{ color: 'var(--secondary-color)', fontWeight: 700 }}>NEBZA Technologies Private Limited</span>. All rights reserved.
+                            </p>
                         </div>
                     </div>
                 </section>
@@ -129,7 +136,7 @@ const Home = ({ view }) => {
                                         {astro.expertise.slice(0, 2).map((e, i) => <span key={i} className="expertise-tag" style={{ border: '1px solid var(--secondary-color)', color: 'var(--secondary-color)', background: 'transparent' }}>{e}</span>)}
                                     </div>
                                     <div className="preview-footer">
-                                        <span className="astro-rate">{currencySymbol}{astro.rate}<small>/min</small></span>
+                                        <div></div>
                                         <Link to="/login" className="btn btn-outline btn-sm">Book Now</Link>
                                     </div>
                                 </div>
@@ -245,8 +252,10 @@ const Home = ({ view }) => {
                         <div className="footer-col"><h4>Legal</h4><Link to="/pages/privacy-policy">Privacy Policy</Link><Link to="/pages/terms-of-service">Terms of Service</Link><Link to="/pages/refund-policy">Refund Policy</Link><Link to="/pages/legal">Legal Notice</Link></div>
                     </div>
                 </div>
-                <div className="footer-bottom">
-                    <p>© 2026 {platformName}. All rights reserved.</p>
+                <div className="footer-bottom" style={{ background: 'var(--background-dark)', padding: '2rem', textAlign: 'center', borderTop: '1px solid var(--glass-border)', marginTop: '2rem' }}>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', margin: 0 }}>
+                        Roots Astro is owned by NEBZA Technologies Private Limited. All rights reserved.
+                    </p>
                 </div>
             </footer>
         </div>

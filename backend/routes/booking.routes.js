@@ -86,6 +86,7 @@ router.post('/create', authMiddleware, roleMiddleware(['CLIENT']), async (req, r
                         serviceId: parseInt(serviceId),
                         scheduledAt: new Date(scheduledAt),
                         amount: parseFloat(amount),
+                        problemDesc: req.body.problemDesc || null,
                         status: 'UPCOMING', // Paid instantly
                         zoomMeetingUrl: `https://zoom.us/j/${Math.floor(Math.random() * 9000000000) + 1000000000}` // Mock Zoom Link
                     }
@@ -122,6 +123,7 @@ router.post('/create', authMiddleware, roleMiddleware(['CLIENT']), async (req, r
                 serviceId: parseInt(serviceId),
                 scheduledAt: new Date(scheduledAt),
                 amount: parseFloat(amount),
+                problemDesc: req.body.problemDesc || null,
                 status: 'UPCOMING',
                 zoomMeetingUrl: `https://zoom.us/j/${Math.floor(Math.random() * 9000000000) + 1000000000}`
             }
@@ -253,13 +255,46 @@ router.patch('/admin/refund/:id', authMiddleware, roleMiddleware(['ADMIN']), asy
  *       - bearerAuth: []
  */
 router.patch('/astrologer/start/:id', authMiddleware, roleMiddleware(['ASTROLOGER']), async (req, res) => {
-    const { zoomMeetingUrl } = req.body;
+    let { zoomMeetingUrl } = req.body;
     try {
+        const settings = await prisma.globalSettings.findUnique({ where: { id: 1 } });
+        if (settings && settings.zoomAccountId && settings.zoomClientId && settings.zoomClientSecret) {
+            try {
+                const credentials = Buffer.from(`${settings.zoomClientId}:${settings.zoomClientSecret}`).toString('base64');
+                const tokenRes = await fetch(`https://zoom.us/oauth/token?grant_type=account_credentials&account_id=${settings.zoomAccountId}`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Basic ${credentials}` }
+                });
+                
+                if (tokenRes.ok) {
+                    const tokenData = await tokenRes.json();
+                    const meetingRes = await fetch(`https://api.zoom.us/v2/users/me/meetings`, {
+                        method: 'POST',
+                        headers: { 
+                            'Authorization': `Bearer ${tokenData.access_token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            topic: `Roots Astro Consultation`,
+                            type: 1,
+                            settings: { host_video: true, participant_video: true, waiting_room: true }
+                        })
+                    });
+                    if (meetingRes.ok) {
+                        const meetingData = await meetingRes.json();
+                        zoomMeetingUrl = meetingData.join_url;
+                    }
+                }
+            } catch (zoomErr) {
+                console.error("Zoom API Error:", zoomErr);
+            }
+        }
+
         const booking = await prisma.booking.update({
             where: { id: parseInt(req.params.id), astrologerId: req.user.id },
             data: { status: 'IN_PROGRESS', zoomMeetingUrl }
         });
-        res.json({ message: 'Session started', booking });
+        res.json({ message: 'Session started', booking, zoomMeetingUrl });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
