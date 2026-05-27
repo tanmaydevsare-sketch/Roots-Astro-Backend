@@ -500,6 +500,8 @@ const AdminDashboard = ({ user }) => {
                             mode: data.paypalMode || 'sandbox' 
                         }
                     }));
+                    if (data.razorpayKeyId) setRzpStatus('connected');
+                    if (data.paypalClientId) setPpStatus('connected');
                 }
                 
                 if (data.activeVideoProvider) setActiveVideoProvider(data.activeVideoProvider);
@@ -508,6 +510,11 @@ const AdminDashboard = ({ user }) => {
                     clientId: data.zoomClientId || '',
                     clientSecret: data.zoomClientSecret || ''
                 });
+                if (data.zoomAccountId && data.zoomClientId) {
+                    setZoomStatus('connected');
+                } else {
+                    setZoomStatus('idle');
+                }
 
                 if (data.commissionRate) setCommissionPct(data.commissionRate * 100);
             }
