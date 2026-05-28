@@ -202,6 +202,7 @@ const AdminDashboard = ({ user }) => {
         privacyPolicy: '# Privacy Policy\nYour data is safe with us.',
         termsOfService: '# Terms of Service\nBy using our site...',
         refundPolicy: '# Refund Policy\nWe offer refunds in certain cases.',
+        shippingPolicy: '# Shipping & Delivery Policy\nOur consultation and booking services are delivered digitally immediately.',
         blogContent: '# Latest from Roots Astro\nStay updated with celestial events.',
         legalContent: '# Legal Notices\nGeneral platform governance and regulations.',
 
@@ -467,6 +468,7 @@ const AdminDashboard = ({ user }) => {
                     privacyPolicy: data.privacyPolicy || '',
                     termsOfService: data.termsOfService || '',
                     refundPolicy: data.refundPolicy || '',
+                    shippingPolicy: data.shippingPolicy || '',
                     blogContent: data.blogContent || '',
                     legalContent: data.legalContent || '',
                     activeStorage: data.activeStorage || 'local',
@@ -1935,7 +1937,7 @@ const AdminDashboard = ({ user }) => {
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 2fr)', gap: '2rem' }}>
                         {/* Left Sidebar: Branding & Page Selection */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', maxHeight: 'calc(100vh - 160px)', overflowY: 'auto' }}>
                             <div className="glass-card">
                                 <h3 style={{ marginBottom: '1.25rem', fontSize: '1rem' }}>Platform Logo</h3>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center', textAlign: 'center' }}>
@@ -1979,7 +1981,7 @@ const AdminDashboard = ({ user }) => {
                                 <FormField label="Subtitle"><textarea className="form-input" rows={2} value={settings.heroSubtitle} onChange={e => setSettings({...settings, heroSubtitle: e.target.value})} /></FormField>
                             </div>
 
-                            <div className="glass-card">
+                            <div className="glass-card" style={{ overflow: 'visible' }}>
                                 <h3 style={{ marginBottom: '1rem', fontSize: '1rem' }}>Markdown Pages</h3>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
                                     {[
@@ -1990,6 +1992,7 @@ const AdminDashboard = ({ user }) => {
                                         { id: 'privacyPolicy', label: 'Privacy Policy' },
                                         { id: 'termsOfService', label: 'Terms of Service' },
                                         { id: 'refundPolicy', label: 'Refund Policy' },
+                                        { id: 'shippingPolicy', label: 'Shipping Policy' },
                                     ].map(page => (
                                         <button
                                             key={page.id}
@@ -2007,7 +2010,7 @@ const AdminDashboard = ({ user }) => {
 
                         {/* Right Content Editor */}
                         <div className="glass-card" style={{ minHeight: '600px' }}>
-                            {['aboutUsContent', 'contactContent', 'blogContent', 'legalContent', 'privacyPolicy', 'termsOfService', 'refundPolicy'].includes(expandedConfig) ? (
+                            {['aboutUsContent', 'contactContent', 'blogContent', 'legalContent', 'privacyPolicy', 'termsOfService', 'refundPolicy', 'shippingPolicy'].includes(expandedConfig) ? (
                                 <div className="fade-in" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.75rem' }}>
                                         <h3 style={{ margin: 0 }}>Editing: {expandedConfig.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}</h3>

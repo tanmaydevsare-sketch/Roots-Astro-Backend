@@ -239,6 +239,7 @@ model GlobalSettings {
   privacyPolicy     String?  @default("# Privacy Policy\nYour data is safe with us.")
   termsOfService    String?  @default("# Terms of Service\nBy using our site...")
   refundPolicy      String?  @default("# Refund Policy\nWe offer refunds in certain cases.")
+  shippingPolicy    String?  @default("# Shipping & Delivery Policy\nOur consultation and booking services are delivered digitally immediately.")
   blogContent        String?  @default("# Latest from Roots Astro\nStay updated with celestial events.")
   legalContent       String?  @default("# Legal Notices\nGeneral platform governance and regulations.")
 

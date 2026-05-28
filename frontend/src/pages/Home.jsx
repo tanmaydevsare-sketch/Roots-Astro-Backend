@@ -249,7 +249,7 @@ const Home = ({ view }) => {
                     <div className="footer-links">
                         <div className="footer-col"><h4>Platform</h4><Link to="/signup">Browse Astrologers</Link><Link to="/signup">How It Works</Link><Link to="/apply">Join as Partner</Link></div>
                         <div className="footer-col"><h4>Company</h4><Link to="/pages/about-us">About Us</Link><Link to="/pages/contact">Contact Us</Link><Link to="/pages/blog">Blog & Articles</Link></div>
-                        <div className="footer-col"><h4>Legal</h4><Link to="/pages/privacy-policy">Privacy Policy</Link><Link to="/pages/terms-of-service">Terms of Service</Link><Link to="/pages/refund-policy">Refund Policy</Link><Link to="/pages/legal">Legal Notice</Link></div>
+                        <div className="footer-col"><h4>Legal</h4><Link to="/pages/privacy-policy">Privacy Policy</Link><Link to="/pages/terms-of-service">Terms of Service</Link><Link to="/pages/refund-policy">Refund Policy</Link><Link to="/pages/shipping-policy">Shipping Policy</Link><Link to="/pages/legal">Legal Notice</Link></div>
                     </div>
                 </div>
                 <div className="footer-bottom" style={{ background: 'var(--background-dark)', padding: '2rem', textAlign: 'center', borderTop: '1px solid var(--glass-border)', marginTop: '2rem' }}>

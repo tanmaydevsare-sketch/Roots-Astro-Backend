@@ -99,7 +99,7 @@ router.patch('/admin/global', authMiddleware, roleMiddleware(['SUPERADMIN', 'ADM
             'paypalMode', 'activeVideoProvider', 'heroTitle', 'heroSubtitle', 
             'feature1Title', 'feature1Desc', 'feature2Title', 'feature2Desc', 'feature3Title', 'feature3Desc',
             'aboutUsContent', 'contactContent', 'privacyPolicy', 'termsOfService',
-            'refundPolicy', 'blogContent', 'legalContent', 'sitePrimaryColor',
+            'refundPolicy', 'shippingPolicy', 'blogContent', 'legalContent', 'sitePrimaryColor',
             'siteSecondaryColor', 'siteAccentColor', 'siteLogo'
         ];
 

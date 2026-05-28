@@ -19,6 +19,7 @@ const InfoPage = () => {
         'privacy-policy': { field: 'privacyPolicy', label: 'Privacy Policy', icon: <Shield size={24} color="var(--secondary-color)" /> },
         'terms-of-service': { field: 'termsOfService', label: 'Terms of Service', icon: <Handshake size={24} color="var(--secondary-color)" /> },
         'refund-policy': { field: 'refundPolicy', label: 'Refund Policy', icon: <AlertTriangle size={24} color="var(--secondary-color)" /> },
+        'shipping-policy': { field: 'shippingPolicy', label: 'Shipping Policy', icon: <Handshake size={24} color="var(--secondary-color)" /> },
     };
 
     useEffect(() => {
