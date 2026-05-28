@@ -193,12 +193,47 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance 
             });
             
             const uniqueSlots = Array.from(new Set(computedSlots));
-            return uniqueSlots; // Return computed slots (could be empty if no slots fit)
+
+            // Filter out past slots if selected date is today (IST = UTC+5:30)
+            const nowIST = new Date(Date.now() + 5.5 * 60 * 60 * 1000); // current IST time
+            const todayIST = nowIST.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Asia/Kolkata' });
+            if (selectedDate === todayIST) {
+                const nowMinIST = nowIST.getUTCHours() * 60 + nowIST.getUTCMinutes();
+                return uniqueSlots.filter(slot => {
+                    const slotMin = parseTimeToMin(slot);
+                    return slotMin !== null && slotMin > nowMinIST;
+                });
+            }
+
+            return uniqueSlots;
         }
         
-        return selectedDate ? ['9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM'] : [];
+        // Fallback static slots — filter past ones if today
+        const nowIST = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+        const todayIST = nowIST.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Asia/Kolkata' });
+        const staticSlots = ['9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM'];
+        if (selectedDate === todayIST) {
+            const nowMinIST = nowIST.getUTCHours() * 60 + nowIST.getUTCMinutes();
+            const parseStatic = (t) => {
+                t = t.trim().toUpperCase();
+                const parts = t.split(' ')[0].split(':');
+                let h = parseInt(parts[0]); let m = parseInt(parts[1]) || 0;
+                if (t.includes('PM') && h !== 12) h += 12;
+                else if (t.includes('AM') && h === 12) h = 0;
+                return h * 60 + m;
+            };
+            return selectedDate ? staticSlots.filter(s => parseStatic(s) > nowMinIST) : [];
+        }
+        return selectedDate ? staticSlots : [];
     }, [astro, selectedDate, selectedService]);
-    const dates = Array.from({length: 5}, (_, i) => { const d = new Date(); d.setDate(d.getDate() + i); return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); });
+
+    // Generate dates starting from today IST
+    const dates = Array.from({length: 7}, (_, i) => {
+        const nowIST = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+        const d = new Date(nowIST);
+        d.setUTCDate(d.getUTCDate() + i);
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Asia/Kolkata' });
+    });
     const currentService = services.find(s => s.name === selectedService);
     const price = currentService?.price || 0;
     const platformFee = +(price * commissionRate).toFixed(2);
