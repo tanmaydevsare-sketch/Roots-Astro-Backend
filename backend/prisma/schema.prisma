@@ -249,6 +249,10 @@ model GlobalSettings {
   siteAccentColor     String @default("#8B5FBF")
   siteLogo            String? 
 
+  // Convenience and GST Rates
+  convenienceRate     Float  @default(0.0)
+  gstRate             Float  @default(0.0)
+
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 }

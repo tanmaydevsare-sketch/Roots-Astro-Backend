@@ -21,6 +21,8 @@ export const SettingsProvider = ({ children }) => {
         feature3Title: 'Zoom Integrated',
         feature3Desc: 'Automated links & secure recordings.',
         siteLogo: '',
+        convenienceRate: 0.0,
+        gstRate: 0.0,
     });
 
     const getCurrencySymbol = (currency) => {

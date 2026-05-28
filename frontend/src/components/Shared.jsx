@@ -89,7 +89,7 @@ export const AstrologerCard = ({ astro, onBook, hideRate = false }) => {
 
 /* ─── Booking Wizard (5 steps: Service → Date/Time → Problem → Pay → Receipt) ─── */
 export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance = 0, defaultService = null }) => {
-    const { currencySymbol, commissionRate = 0.25 } = useSettings();
+    const { currencySymbol, commissionRate = 0.25, convenienceRate = 0.0, gstRate = 0.0 } = useSettings();
     const [step, setStep] = React.useState(1);
     const [selectedService, setSelectedService] = React.useState('');
 
@@ -239,6 +239,12 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance 
     });
     const currentService = services.find(s => s.name === selectedService);
     const price = currentService?.price || 0;
+    
+    // Convenience fee & GST calculations
+    const convenienceFee = +(price * (convenienceRate / 100)).toFixed(2);
+    const gstFee = +(convenienceFee * (gstRate / 100)).toFixed(2);
+    const totalPrice = +(price + convenienceFee + gstFee).toFixed(2);
+    
     const platformFee = +(price * commissionRate).toFixed(2);
     const astrologerReceives = +(price * (1 - commissionRate)).toFixed(2);
 
@@ -255,7 +261,7 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance 
     // Simulate/Process payment gateway
     const initiatePayment = async () => {
         if (paymentMethod === 'WALLET') {
-            if (walletBalance < price) {
+            if (walletBalance < totalPrice) {
                 alert("Insufficient wallet balance. Please top up your wallet.");
                 return;
             }
@@ -266,7 +272,7 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance 
                     astrologer: astro.name, astrologerId: astro.id,
                     serviceId: currentService?.id || 1,
                     service: selectedService, date: selectedDate, time: selectedSlot,
-                    amount: price, platformFee, astrologerReceives,
+                    amount: totalPrice, platformFee, astrologerReceives,
                     status: 'upcoming',
                     zoomLink: 'https://zoom.us/j/mock' + Date.now(),
                     problemDescription: problemText.trim(),
@@ -284,8 +290,8 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance 
 
         if (paymentMethod === 'bank' || paymentMethod === 'upi_direct') {
             setManualInstructions(paymentMethod === 'bank' 
-                ? { title: 'Bank Transfer Instructions', body: `Please transfer ${currencySymbol}${price.toFixed(2)} to: \nBank: Roots Astro Bank\nA/C: 9928374650\nIFSC: ROOTS000123\nRef: #PAY-${Date.now().toString().slice(-6)}` }
-                : { title: 'UPI Direct Instructions', body: `Please pay ${currencySymbol}${price.toFixed(2)} to: rootsastro@upi\nRef: #PAY-${Date.now().toString().slice(-6)}` }
+                ? { title: 'Bank Transfer Instructions', body: `Please transfer ${currencySymbol}${totalPrice.toFixed(2)} to: \nBank: Roots Astro Bank\nA/C: 9928374650\nIFSC: ROOTS000123\nRef: #PAY-${Date.now().toString().slice(-6)}` }
+                : { title: 'UPI Direct Instructions', body: `Please pay ${currencySymbol}${totalPrice.toFixed(2)} to: rootsastro@upi\nRef: #PAY-${Date.now().toString().slice(-6)}` }
             );
             return;
         }
@@ -297,7 +303,7 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance 
                     astrologer: astro.name, astrologerId: astro.id,
                     serviceId: currentService?.id || 1,
                     service: selectedService, date: selectedDate, time: selectedSlot,
-                    amount: price, platformFee, astrologerReceives,
+                    amount: totalPrice, platformFee, astrologerReceives,
                     status: 'upcoming',
                     zoomLink: 'https://zoom.us/j/mock' + Date.now(),
                     problemDescription: problemText.trim(),
@@ -324,7 +330,7 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance 
                     astrologer: astro.name, astrologerId: astro.id,
                     serviceId: currentService?.id || 1,
                     service: selectedService, date: selectedDate, time: selectedSlot,
-                    amount: price, platformFee, astrologerReceives,
+                    amount: totalPrice, platformFee, astrologerReceives,
                     status: 'upcoming',
                     zoomLink: 'https://zoom.us/j/mock' + Date.now(),
                     problemDescription: problemText.trim(),
@@ -348,7 +354,7 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance 
                 astrologer: astro.name, astrologerId: astro.id,
                 serviceId: currentService?.id || 1,
                 service: selectedService, date: selectedDate, time: selectedSlot,
-                amount: price, platformFee, astrologerReceives,
+                amount: totalPrice, platformFee, astrologerReceives,
                 status: 'upcoming',
                 zoomLink: 'https://zoom.us/j/mock' + Date.now(),
                 problemDescription: problemText.trim(),
@@ -446,16 +452,22 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance 
                             <div key={k} className="summary-row"><span>{k}</span><strong>{v}</strong></div>
                         ))}
                         <div className="summary-divider" />
-                        <div className="summary-row"><span>Session fee</span><strong>{currencySymbol}{price.toFixed(2)}</strong></div>
-                        <div className="summary-row" style={{ fontSize: '0.83rem', color: 'var(--text-muted)' }}>
-                            <span>Platform commission ({Math.round(commissionRate * 100)}%)</span><strong style={{ color: 'var(--text-muted)' }}>{currencySymbol}{platformFee.toFixed(2)}</strong>
-                        </div>
-                        <div className="summary-row" style={{ fontSize: '0.83rem', color: 'var(--text-muted)' }}>
-                            <span>Astrologer receives (75%)</span><strong style={{ color: '#1cc88a' }}>{currencySymbol}{astrologerReceives.toFixed(2)}</strong>
-                        </div>
+                        <div className="summary-row"><span>Amount</span><strong>{currencySymbol}{price.toFixed(2)}</strong></div>
+                        {convenienceRate > 0 && (
+                            <div className="summary-row" style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
+                                <span>Convenience Charges ({convenienceRate}%)</span>
+                                <strong>{currencySymbol}{convenienceFee.toFixed(2)}</strong>
+                            </div>
+                        )}
+                        {gstRate > 0 && convenienceRate > 0 && (
+                            <div className="summary-row" style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
+                                <span>GST on Convenience Charges ({gstRate}%)</span>
+                                <strong>{currencySymbol}{gstFee.toFixed(2)}</strong>
+                            </div>
+                        )}
                         <div className="summary-row summary-total">
-                            <span>Total Payable</span>
-                            <strong className="gold-text">{currencySymbol}{price.toFixed(2)}</strong>
+                            <span>Total Charges</span>
+                            <strong className="gold-text">{currencySymbol}{totalPrice.toFixed(2)}</strong>
                         </div>
                     </div>
 
@@ -466,9 +478,9 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance 
                             <div className="payment-icon" style={{ background: 'var(--secondary-color)', color: 'var(--primary-color)' }}><CreditCard size={18} /></div>
                             <div style={{ textAlign: 'left' }}>
                                 <strong>Pay with Roots Wallet</strong>
-                                <p style={{ color: walletBalance < price ? 'var(--badge-error-text)' : 'var(--badge-success-text)' }}>
+                                <p style={{ color: walletBalance < totalPrice ? 'var(--badge-error-text)' : 'var(--badge-success-text)' }}>
                                     Current Balance: {currencySymbol}{(walletBalance || 0).toFixed(2)}
-                                    {walletBalance < price && ' (Insufficient funds)'}
+                                    {walletBalance < totalPrice && ' (Insufficient funds)'}
                                 </p>
                             </div>
                             {paymentMethod === 'WALLET' && <Check size={14} color="#1cc88a" />}

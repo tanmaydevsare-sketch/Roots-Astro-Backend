@@ -172,6 +172,8 @@ const AdminDashboard = ({ user }) => {
         supportEmail: '',
         contactPhone: '',
         systemCurrency: 'INR',
+        convenienceRate: 0.0,
+        gstRate: 0.0,
         
         // Recording Governance
         recordSessions: true,
@@ -442,7 +444,9 @@ const AdminDashboard = ({ user }) => {
                     platformName: data.platformName || 'Roots Astro',
                     supportEmail: data.supportEmail || '',
                     contactPhone: data.contactPhone || '',
-                    systemCurrency: data.systemCurrency || 'USD',
+                    systemCurrency: data.systemCurrency || 'INR',
+                    convenienceRate: data.convenienceRate ?? 0.0,
+                    gstRate: data.gstRate ?? 0.0,
                     recordSessions: data.recordSessions ?? true,
                     overallRecordingGovernance: data.overallRecordingGovernance ?? true,
                     recordingRetentionDays: data.recordingRetentionDays ?? 30,
@@ -1824,6 +1828,14 @@ const AdminDashboard = ({ user }) => {
                                     <select className="form-input" value={settings.systemCurrency} onChange={e => setSettings({ ...settings, systemCurrency: e.target.value })}>
                                         {['USD', 'INR', 'GBP', 'EUR', 'CAD'].map(c => <option key={c} value={c}>{c}</option>)}
                                     </select>
+                                </FormField>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                <FormField label="Convenience Charge (%)">
+                                    <input className="form-input" type="number" step="0.01" value={settings.convenienceRate} onChange={e => setSettings({ ...settings, convenienceRate: parseFloat(e.target.value) || 0.0 })} />
+                                </FormField>
+                                <FormField label="GST on Convenience (%)">
+                                    <input className="form-input" type="number" step="0.01" value={settings.gstRate} onChange={e => setSettings({ ...settings, gstRate: parseFloat(e.target.value) || 0.0 })} />
                                 </FormField>
                             </div>
                             <FormField label="Support Email"><input className="form-input" type="email" value={settings.supportEmail} onChange={e => setSettings({ ...settings, supportEmail: e.target.value })} placeholder="support@rootsastro.com" /></FormField>
