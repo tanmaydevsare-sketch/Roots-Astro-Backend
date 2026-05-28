@@ -3,6 +3,25 @@ const router = express.Router();
 const prisma = require('../config/prisma');
 const { authMiddleware, roleMiddleware } = require('../middleware/auth');
 
+// Helper to parse scheduledAt string in IST (+05:30) if no offset is specified
+function parseISTToUTC(scheduledAtStr) {
+    if (typeof scheduledAtStr !== 'string') {
+        return new Date(scheduledAtStr);
+    }
+    // If it already has timezone info, parse it as-is
+    if (scheduledAtStr.includes('Z') || scheduledAtStr.match(/GMT|UTC|[+-]\d{2}:?\d{2}/i)) {
+        return new Date(scheduledAtStr);
+    }
+    // Otherwise, append +05:30 (IST) timezone offset
+    const cleaned = scheduledAtStr.trim();
+    const withOffset = `${cleaned} +05:30`;
+    const date = new Date(withOffset);
+    if (isNaN(date.getTime())) {
+        return new Date(scheduledAtStr);
+    }
+    return date;
+}
+
 /**
  * @swagger
  * /api/bookings:
@@ -63,6 +82,28 @@ router.get('/', authMiddleware, async (req, res) => {
 router.post('/create', authMiddleware, roleMiddleware(['CLIENT']), async (req, res) => {
     const { astrologerId, serviceId, scheduledAt, amount, paymentMethod } = req.body;
     try {
+        const slotDate = parseISTToUTC(scheduledAt);
+
+        // 1. Validation: Ensure the slot is in the future as per IST
+        if (slotDate.getTime() < Date.now()) {
+            return res.status(400).json({ error: 'This time slot has already passed as per IST. Please select a future time.' });
+        }
+
+        // 2. Validation: Prevent double-booking (ensure the slot is not already booked by another active booking)
+        const existingBooking = await prisma.booking.findFirst({
+            where: {
+                astrologerId: parseInt(astrologerId),
+                scheduledAt: slotDate,
+                status: {
+                    notIn: ['CANCELLED', 'CANCELLED_BY_ADMIN', 'REFUNDED_BY_ADMIN']
+                }
+            }
+        });
+
+        if (existingBooking) {
+            return res.status(409).json({ error: 'This slot has already been booked by another user. Please choose another slot.' });
+        }
+
         // If paying with wallet
         if (paymentMethod === 'WALLET') {
             const wallet = await prisma.wallet.findUnique({ where: { userId: req.user.id } });
@@ -84,7 +125,7 @@ router.post('/create', authMiddleware, roleMiddleware(['CLIENT']), async (req, r
                         clientId: req.user.id,
                         astrologerId: parseInt(astrologerId),
                         serviceId: parseInt(serviceId),
-                        scheduledAt: new Date(scheduledAt),
+                        scheduledAt: slotDate,
                         amount: parseFloat(amount),
                         problemDesc: req.body.problemDesc || null,
                         status: 'UPCOMING', // Paid instantly
@@ -121,7 +162,7 @@ router.post('/create', authMiddleware, roleMiddleware(['CLIENT']), async (req, r
                 clientId: req.user.id,
                 astrologerId: parseInt(astrologerId),
                 serviceId: parseInt(serviceId),
-                scheduledAt: new Date(scheduledAt),
+                scheduledAt: slotDate,
                 amount: parseFloat(amount),
                 problemDesc: req.body.problemDesc || null,
                 status: 'UPCOMING',

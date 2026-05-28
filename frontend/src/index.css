@@ -5716,3 +5716,68 @@ html {
   opacity: 0 !important;
   pointer-events: none !important;
 }
+
+/* --- CMS Page Builder Layout Fixes --- */
+.cms-page-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: 2rem;
+  align-items: start;
+}
+
+.cms-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  position: sticky;
+  top: 1rem;
+}
+
+.cms-sidebar .glass-card {
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.cms-sidebar .glass-card:hover {
+  transform: none;
+  border-color: rgba(212, 175, 55, 0.3);
+  box-shadow: 0 4px 30px rgba(212, 175, 55, 0.12);
+}
+
+.cms-page-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.65rem 1rem;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-align: left;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.cms-page-btn:hover {
+  background: rgba(212, 175, 55, 0.1);
+  border-color: rgba(212, 175, 55, 0.3);
+  color: var(--secondary-color);
+}
+
+.cms-page-btn.active {
+  background: rgba(212, 175, 55, 0.15);
+  border-color: var(--secondary-color);
+  color: var(--secondary-color);
+  box-shadow: 0 0 12px rgba(212, 175, 55, 0.15);
+}
+
+@media (max-width: 992px) {
+  .cms-page-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .cms-sidebar {
+    position: static;
+  }
+}
