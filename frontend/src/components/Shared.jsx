@@ -195,10 +195,12 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance 
             const uniqueSlots = Array.from(new Set(computedSlots));
 
             // Filter out past slots if selected date is today (IST = UTC+5:30)
-            const nowIST = new Date(Date.now() + 5.5 * 60 * 60 * 1000); // current IST time
-            const todayIST = nowIST.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Asia/Kolkata' });
+            const todayIST = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Asia/Kolkata' });
             if (selectedDate === todayIST) {
-                const nowMinIST = nowIST.getUTCHours() * 60 + nowIST.getUTCMinutes();
+                const nowISTStr = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: false });
+                const [nowH, nowM] = nowISTStr.split(':').map(Number);
+                const nowMinIST = nowH * 60 + nowM;
+
                 return uniqueSlots.filter(slot => {
                     const slotMin = parseTimeToMin(slot);
                     return slotMin !== null && slotMin > nowMinIST;
@@ -209,11 +211,13 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance 
         }
         
         // Fallback static slots — filter past ones if today
-        const nowIST = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
-        const todayIST = nowIST.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Asia/Kolkata' });
-        const staticSlots = ['9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM'];
+        const todayIST = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Asia/Kolkata' });
+        const staticSlots = ['9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM', '1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM'];
         if (selectedDate === todayIST) {
-            const nowMinIST = nowIST.getUTCHours() * 60 + nowIST.getUTCMinutes();
+            const nowISTStr = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: false });
+            const [nowH, nowM] = nowISTStr.split(':').map(Number);
+            const nowMinIST = nowH * 60 + nowM;
+
             const parseStatic = (t) => {
                 t = t.trim().toUpperCase();
                 const parts = t.split(' ')[0].split(':');
@@ -229,9 +233,8 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance 
 
     // Generate dates starting from today IST
     const dates = Array.from({length: 7}, (_, i) => {
-        const nowIST = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
-        const d = new Date(nowIST);
-        d.setUTCDate(d.getUTCDate() + i);
+        const d = new Date();
+        d.setDate(d.getDate() + i);
         return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Asia/Kolkata' });
     });
     const currentService = services.find(s => s.name === selectedService);
