@@ -326,7 +326,7 @@ const AdminDashboard = ({ user }) => {
                         languages: profile.languages || 'English, Hindi',
                         expertise: profile.expertise ? profile.expertise.split(',').map(e => e.trim()) : [],
                         rate: profile.rate || "50",
-                        sessions: p.astrologerBookings?.length || 0,
+                        sessions: p._count?.astrologerBookings || 0,
                         available: profile.isOnline,
                         astrologerProfile: { image: profile.image }
                     };
@@ -1935,9 +1935,9 @@ const AdminDashboard = ({ user }) => {
 
                     {settingsSaved && <div className="fee-transparency-note" style={{ marginBottom: '1.5rem' }}>✓ Changes deployed live to the Roots Astro platform.</div>}
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 2fr)', gap: '2rem' }}>
+                    <div className="cms-page-grid">
                         {/* Left Sidebar: Branding & Page Selection */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', maxHeight: 'calc(100vh - 160px)', overflowY: 'auto' }}>
+                        <div className="cms-sidebar">
                             <div className="glass-card">
                                 <h3 style={{ marginBottom: '1.25rem', fontSize: '1rem' }}>Platform Logo</h3>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center', textAlign: 'center' }}>
@@ -1981,7 +1981,7 @@ const AdminDashboard = ({ user }) => {
                                 <FormField label="Subtitle"><textarea className="form-input" rows={2} value={settings.heroSubtitle} onChange={e => setSettings({...settings, heroSubtitle: e.target.value})} /></FormField>
                             </div>
 
-                            <div className="glass-card" style={{ overflow: 'visible' }}>
+                            <div className="glass-card">
                                 <h3 style={{ marginBottom: '1rem', fontSize: '1rem' }}>Markdown Pages</h3>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
                                     {[
@@ -1996,9 +1996,8 @@ const AdminDashboard = ({ user }) => {
                                     ].map(page => (
                                         <button
                                             key={page.id}
-                                            className={`btn ${expandedConfig === page.id ? 'btn-secondary' : 'btn-outline'} btn-sm btn-block`}
+                                            className={`cms-page-btn${expandedConfig === page.id ? ' active' : ''}`}
                                             onClick={() => setExpandedConfig(page.id)}
-                                            style={{ textAlign: 'left', display: 'flex', justifyContent: 'space-between', padding: '0.75rem' }}
                                         >
                                             {page.label}
                                             <Edit2 size={13} />

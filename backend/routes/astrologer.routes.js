@@ -48,6 +48,15 @@ router.get('/', async (req, res) => {
                         availability: true,
                         reviews: true
                     }
+                },
+                _count: {
+                    select: {
+                        astrologerBookings: {
+                            where: {
+                                status: { in: ['COMPLETED', 'COMPLETED_BY_ADMIN'] }
+                            }
+                        }
+                    }
                 }
             }
         });
@@ -435,6 +444,15 @@ router.get('/:id', async (req, res) => {
                         },
                         availability: true,
                         reviews: { include: { astrologer: true } }
+                    }
+                },
+                _count: {
+                    select: {
+                        astrologerBookings: {
+                            where: {
+                                status: { in: ['COMPLETED', 'COMPLETED_BY_ADMIN'] }
+                            }
+                        }
                     }
                 }
             }

@@ -240,7 +240,7 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
                     const languages = prof.languages || "English";
                     const bio = prof.bio || "Verified professional astrologer guidance.";
                     const rate = parseFloat(prof.rate || "50");
-                    const sessionsCount = 120 + (prof.bookings?.length || 0);
+                    const sessionsCount = u._count?.astrologerBookings || 0;
                     return {
                         id: u.id,
                         name: name,

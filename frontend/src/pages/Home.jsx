@@ -45,6 +45,7 @@ const Home = ({ view }) => {
                                     : ['Astrology']),
                             rate: u.astrologerProfile?.rate || '50',
                             rating: u.astrologerProfile?.rating || 5.0,
+                            sessions: u._count?.astrologerBookings || 0,
                             available: u.astrologerProfile?.isOnline ?? false
                         }));
                         setLiveAstrologers(formatted);
