@@ -47,6 +47,38 @@ const corsOptions = {
   credentials: true
 };
 app.use(cors(corsOptions));
+
+// API Lockdown Middleware (Restricts external third-party API access when enabled)
+app.use(async (req, res, next) => {
+  if (req.path === '/api/settings/public/global' || req.path === '/api/health' || req.path.startsWith('/api/docs')) {
+    return next();
+  }
+
+  try {
+    const prisma = require('./config/prisma');
+    const settings = await prisma.globalSettings.findUnique({ where: { id: 1 } });
+    
+    if (settings && settings.apiLockdown) {
+      const origin = req.headers.origin || req.headers.referer;
+      
+      const isAllowedOrigin = !origin || 
+                              origin.includes('rootsastro.com') ||
+                              origin.includes('roots-astro.web.app') ||
+                              origin.includes('firebaseapp.com') ||
+                              origin.includes('localhost') ||
+                              origin.includes('127.0.0.1');
+
+      if (!isAllowedOrigin) {
+        console.warn(`[API LOCKDOWN] Blocked request to ${req.path} from unauthorized origin: ${origin}`);
+        return res.status(403).json({ error: 'API Lockdown Active: External third-party API access is restricted.' });
+      }
+    }
+  } catch (err) {
+    console.error('[API LOCKDOWN] Error checking settings:', err);
+  }
+  next();
+});
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));

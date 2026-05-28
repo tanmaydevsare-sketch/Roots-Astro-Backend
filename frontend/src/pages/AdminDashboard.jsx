@@ -171,7 +171,7 @@ const AdminDashboard = ({ user }) => {
         platformName: 'Roots Astro',
         supportEmail: '',
         contactPhone: '',
-        systemCurrency: 'USD',
+        systemCurrency: 'INR',
         
         // Recording Governance
         recordSessions: true,

@@ -8,7 +8,7 @@ export const useSettings = () => useContext(SettingsContext);
 export const SettingsProvider = ({ children }) => {
     const [settings, setSettings] = useState({
         platformName: 'Roots Astro',
-        systemCurrency: 'USD',
+        systemCurrency: 'INR',
         sitePrimaryColor: '#2D1E4D',
         siteSecondaryColor: '#D4AF37',
         siteAccentColor: '#8B5FBF',
