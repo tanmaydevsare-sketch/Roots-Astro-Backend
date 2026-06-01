@@ -23,6 +23,13 @@ const AdminDashboard = ({ user }) => {
     const [smsSent, setSmsSent] = useState(false);
     const setTab = (t) => setSearchParams({ tab: t });
     const [users, setUsers] = useState([]);
+    const [selectedUsers, setSelectedUsers] = useState([]);
+    const [passwordResetUser, setPasswordResetUser] = useState(null);
+    const [passwordResetModal, setPasswordResetModal] = useState(false);
+    const [newPasswordVal, setNewPasswordVal] = useState('');
+    const [passwordSuccess, setPasswordSuccess] = useState('');
+    const [passwordError, setPasswordError] = useState('');
+    const [pwdVisible, setPwdVisible] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [userRoleFilter, setUserRoleFilter] = useState('all');
     const [userStatusFilter, setUserStatusFilter] = useState('all');
@@ -218,6 +225,63 @@ const AdminDashboard = ({ user }) => {
                 alert(`Error updating services status: ${err.error || 'Unknown error'}`);
             }
         } catch (err) { console.error("Bulk service status update failed", err); }
+    };
+
+    const deleteUser = async (id) => {
+        if (!window.confirm('Are you sure you want to delete this user permanently? This will delete all their profiles, wallets, bookings and other data.')) return;
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch(`${API_URL}/api/auth/admin/users/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                fetchUsers();
+            } else {
+                const err = await res.json();
+                alert(`Error: ${err.error || 'Failed to delete user'}`);
+            }
+        } catch (err) { console.error("Delete user failed", err); }
+    };
+
+    const deleteSelectedUsers = async () => {
+        if (!selectedUsers.length) return;
+        if (!window.confirm(`Are you sure you want to delete the ${selectedUsers.length} selected users permanently? This will delete all their associated profiles, wallets, and bookings.`)) return;
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch(`${API_URL}/api/auth/admin/users/bulk-delete`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ ids: selectedUsers })
+            });
+            if (res.ok) {
+                fetchUsers();
+                setSelectedUsers([]);
+            } else {
+                const err = await res.json();
+                alert(`Error: ${err.error || 'Failed to delete selected users'}`);
+            }
+        } catch (err) { console.error("Bulk delete users failed", err); }
+    };
+
+    const changeSelectedUsersStatus = async (status) => {
+        if (!selectedUsers.length) return;
+        if (!window.confirm(`Are you sure you want to change the status of ${selectedUsers.length} selected users to ${status.toUpperCase()}?`)) return;
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch(`${API_URL}/api/auth/admin/users/bulk-status`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ ids: selectedUsers, status })
+            });
+            if (res.ok) {
+                fetchUsers();
+                setSelectedUsers([]);
+            } else {
+                const err = await res.json();
+                alert(`Error: ${err.error || 'Failed to update user statuses'}`);
+            }
+        } catch (err) { console.error("Bulk update user status failed", err); }
     };
 
     const moveSelectedServicesCategory = async (categoryId) => {
@@ -1307,6 +1371,202 @@ const AdminDashboard = ({ user }) => {
                 </div>
             </Modal>
 
+            {/* ── Guided Password Management Modal ── */}
+            <Modal isOpen={passwordResetModal} onClose={() => setPasswordResetModal(false)} title="Security & Password Management" width="500px">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', padding: '0.5rem 0' }}>
+                    <div style={{ background: 'rgba(255,255,255,0.02)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Target User:</div>
+                        <strong style={{ fontSize: '1.1rem', color: 'var(--secondary-color)', display: 'block', marginTop: '0.2rem' }}>
+                            {passwordResetUser?.name || 'User'}
+                        </strong>
+                        <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{passwordResetUser?.email}</span>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '0.75rem' }}>
+                        <button 
+                            className="btn btn-outline" 
+                            style={{ flex: 1, padding: '0.5rem 1rem', borderColor: 'var(--secondary-color)', color: 'var(--secondary-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', fontWeight: 600 }}
+                            onClick={() => {
+                                const upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+                                const lower = "abcdefghijklmnopqrstuvwxyz";
+                                const numbers = "0123456789";
+                                const special = "!@#$%^*";
+                                let password = "";
+                                password += upper[Math.floor(Math.random() * upper.length)];
+                                password += lower[Math.floor(Math.random() * lower.length)];
+                                password += numbers[Math.floor(Math.random() * numbers.length)];
+                                password += special[Math.floor(Math.random() * special.length)];
+                                const all = upper + lower + numbers + special;
+                                for (let i = 0; i < 8; i++) {
+                                    password += all[Math.floor(Math.random() * all.length)];
+                                }
+                                password = password.split('').sort(() => 0.5 - Math.random()).join('');
+                                setNewPasswordVal(password);
+                                setPasswordSuccess('');
+                                setPasswordError('');
+                            }}
+                        >
+                            <Zap size={15} fill="currentColor" /> Auto-Generate Secure
+                        </button>
+                    </div>
+
+                    <FormField label="Configure Password">
+                        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                            <input 
+                                className="form-input" 
+                                type={pwdVisible ? "text" : "password"} 
+                                value={newPasswordVal} 
+                                onChange={e => {
+                                    setNewPasswordVal(e.target.value);
+                                    setPasswordSuccess('');
+                                    setPasswordError('');
+                                }} 
+                                placeholder="Enter secure password" 
+                                style={{ paddingRight: '3rem' }}
+                            />
+                            <button 
+                                type="button" 
+                                className="btn btn-ghost" 
+                                style={{ position: 'absolute', right: '0.5rem', padding: '0.2rem 0.5rem', minWidth: 'auto', background: 'none', border: 'none', color: 'var(--text-muted)' }}
+                                onClick={() => setPwdVisible(!pwdVisible)}
+                            >
+                                <Eye size={16} />
+                            </button>
+                        </div>
+                    </FormField>
+
+                    {/* Dynamic Password Strength Visualizer */}
+                    {newPasswordVal && (
+                        <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+                                <span style={{ color: 'var(--text-muted)' }}>Password Strength:</span>
+                                <strong style={{ color: 
+                                    (() => {
+                                        let s = 0;
+                                        if (newPasswordVal.length >= 8) s++;
+                                        if (/[A-Z]/.test(newPasswordVal)) s++;
+                                        if (/[a-z]/.test(newPasswordVal)) s++;
+                                        if (/[0-9]/.test(newPasswordVal)) s++;
+                                        if (/[!@#$%^*]/.test(newPasswordVal)) s++;
+                                        return s <= 2 ? '#ff6b6b' : s <= 4 ? '#ffb900' : '#1cc88a';
+                                    })()
+                                }}>
+                                    {(() => {
+                                        let s = 0;
+                                        if (newPasswordVal.length >= 8) s++;
+                                        if (/[A-Z]/.test(newPasswordVal)) s++;
+                                        if (/[a-z]/.test(newPasswordVal)) s++;
+                                        if (/[0-9]/.test(newPasswordVal)) s++;
+                                        if (/[!@#$%^*]/.test(newPasswordVal)) s++;
+                                        return s <= 2 ? 'Weak' : s <= 4 ? 'Medium' : 'Strong & Secure';
+                                    })()}
+                                </strong>
+                            </div>
+                            <div style={{ height: '6px', background: 'rgba(255,255,255,0.05)', borderRadius: '10px', overflow: 'hidden' }}>
+                                <div style={{ 
+                                    height: '100%', 
+                                    transition: 'width 0.3s ease',
+                                    width: (() => {
+                                        let s = 0;
+                                        if (newPasswordVal.length >= 8) s++;
+                                        if (/[A-Z]/.test(newPasswordVal)) s++;
+                                        if (/[a-z]/.test(newPasswordVal)) s++;
+                                        if (/[0-9]/.test(newPasswordVal)) s++;
+                                        if (/[!@#$%^*]/.test(newPasswordVal)) s++;
+                                        return `${(s / 5) * 100}%`;
+                                    })(),
+                                    background: (() => {
+                                        let s = 0;
+                                        if (newPasswordVal.length >= 8) s++;
+                                        if (/[A-Z]/.test(newPasswordVal)) s++;
+                                        if (/[a-z]/.test(newPasswordVal)) s++;
+                                        if (/[0-9]/.test(newPasswordVal)) s++;
+                                        if (/[!@#$%^*]/.test(newPasswordVal)) s++;
+                                        return s <= 2 ? '#ff6b6b' : s <= 4 ? '#ffb900' : '#1cc88a';
+                                    })()
+                                }} />
+                            </div>
+
+                            {/* Guideline Checklist */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem', marginTop: '0.25rem', fontSize: '0.78rem', background: 'rgba(255,255,255,0.01)', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: newPasswordVal.length >= 8 ? '#1cc88a' : 'var(--text-muted)' }}>
+                                    <Check size={12} /> Minimum 8 characters
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: /[A-Z]/.test(newPasswordVal) ? '#1cc88a' : 'var(--text-muted)' }}>
+                                    <Check size={12} /> Uppercase letter (A-Z)
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: /[a-z]/.test(newPasswordVal) ? '#1cc88a' : 'var(--text-muted)' }}>
+                                    <Check size={12} /> Lowercase letter (a-z)
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: /[0-9]/.test(newPasswordVal) ? '#1cc88a' : 'var(--text-muted)' }}>
+                                    <Check size={12} /> Numeric digit (0-9)
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: /[!@#$%^*]/.test(newPasswordVal) ? '#1cc88a' : 'var(--text-muted)', gridColumn: '1 / span 2' }}>
+                                    <Check size={12} /> Special character (!@#$%^*)
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {passwordError && (
+                        <div className="fade-in" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', color: '#ff6b6b', fontSize: '0.85rem', background: 'rgba(255,74,74,0.05)', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,74,74,0.1)' }}>
+                            <AlertCircle size={14} /> {passwordError}
+                        </div>
+                    )}
+                    {passwordSuccess && (
+                        <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', color: '#1cc88a', fontSize: '0.85rem', background: 'rgba(28,200,138,0.05)', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(28,200,138,0.1)' }}>
+                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                <CheckCircle size={14} /> {passwordSuccess}
+                            </div>
+                            <button 
+                                className="btn btn-outline btn-xs" 
+                                style={{ borderColor: '#1cc88a', color: '#1cc88a', alignSelf: 'flex-start', marginTop: '0.2rem' }}
+                                onClick={() => {
+                                    navigator.clipboard.writeText(newPasswordVal);
+                                    alert('Password copied to clipboard!');
+                                }}
+                            >
+                                Copy Password to Clipboard
+                            </button>
+                        </div>
+                    )}
+
+                    <div style={{ display: 'flex', gap: '1rem', marginTop: '0.75rem' }}>
+                        <button 
+                            className="btn btn-primary" 
+                            style={{ flex: 1 }} 
+                            onClick={async () => {
+                                if (!newPasswordVal || newPasswordVal.length < 6) {
+                                    setPasswordError('Password must be at least 6 characters.');
+                                    return;
+                                }
+                                const token = localStorage.getItem('token');
+                                try {
+                                    const res = await fetch(`${API_URL}/api/auth/admin/users/${passwordResetUser.id}/reset-password`, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                                        body: JSON.stringify({ newPassword: newPasswordVal })
+                                    });
+                                    if (res.ok) {
+                                        setPasswordSuccess(`Successfully reset password for ${passwordResetUser.name}!`);
+                                        setPasswordError('');
+                                    } else {
+                                        const err = await res.json();
+                                        setPasswordError(err.error || 'Failed to reset password');
+                                    }
+                                } catch (err) {
+                                    console.error("Reset password error", err);
+                                    setPasswordError('Network connection failed');
+                                }
+                            }}
+                        >
+                            Reset Password
+                        </button>
+                        <button className="btn btn-outline" onClick={() => setPasswordResetModal(false)}>Close</button>
+                    </div>
+                </div>
+            </Modal>
+
             {/* ── Bulk Import Excel/Paste Modal ── */}
             <Modal isOpen={bulkModal} onClose={() => setBulkModal(false)} title={`Bulk Import ${bulkType === 'categories' ? 'Categories' : 'Services'}`} width="850px">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
@@ -1806,14 +2066,30 @@ const AdminDashboard = ({ user }) => {
                             <h2 className="dash-title" style={{ margin: 0 }}>User Management</h2>
                             <p className="dash-sub" style={{ margin: '0.3rem 0 0' }}>Manage roles, account status, and platform access for all users.</p>
                         </div>
-                        <div className="search-bar" style={{ width: '320px' }}>
-                            <Search size={18} color="var(--text-muted)" />
-                            <input 
-                                className="search-input" 
-                                placeholder="Search by name or email..." 
-                                value={searchQuery} 
-                                onChange={e => setSearchQuery(e.target.value)} 
-                            />
+                        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                            {selectedUsers.length > 0 && (
+                                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', background: 'rgba(255,255,255,0.02)', padding: '0.35rem 0.75rem', borderRadius: '10px', border: '1px solid var(--glass-border)', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
+                                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Bulk Actions ({selectedUsers.length}):</span>
+                                    <button className="btn btn-xs btn-outline" onClick={() => changeSelectedUsersStatus('active')}>
+                                        Activate
+                                    </button>
+                                    <button className="btn btn-xs btn-outline" onClick={() => changeSelectedUsersStatus('suspended')}>
+                                        Suspend
+                                    </button>
+                                    <button className="btn btn-xs" style={{ background: 'var(--error)', color: '#fff', height: '28px', display: 'flex', alignItems: 'center' }} onClick={deleteSelectedUsers}>
+                                        <Trash2 size={12} style={{ marginRight: '0.25rem' }} /> Delete ({selectedUsers.length})
+                                    </button>
+                                </div>
+                            )}
+                            <div className="search-bar" style={{ width: '320px' }}>
+                                <Search size={18} color="var(--text-muted)" />
+                                <input 
+                                    className="search-input" 
+                                    placeholder="Search by name or email..." 
+                                    value={searchQuery} 
+                                    onChange={e => setSearchQuery(e.target.value)} 
+                                />
+                            </div>
                         </div>
                     </div>
 
@@ -1824,7 +2100,7 @@ const AdminDashboard = ({ user }) => {
                                 <button 
                                     key={role} 
                                     className={`filter-tag ${userRoleFilter === role ? 'active' : ''}`} 
-                                    onClick={() => setUserRoleFilter(role)}
+                                    onClick={() => { setUserRoleFilter(role); setSelectedUsers([]); }}
                                 >
                                     {role === 'all' ? 'All Roles' : role}
                                 </button>
@@ -1836,7 +2112,7 @@ const AdminDashboard = ({ user }) => {
                                 <button 
                                     key={status} 
                                     className={`filter-tag ${userStatusFilter === status ? 'active' : ''}`} 
-                                    onClick={() => setUserStatusFilter(status)}
+                                    onClick={() => { setUserStatusFilter(status); setSelectedUsers([]); }}
                                 >
                                     {status === 'all' ? 'All Status' : status.charAt(0).toUpperCase() + status.slice(1)}
                                 </button>
@@ -1848,6 +2124,40 @@ const AdminDashboard = ({ user }) => {
                         <table className="data-table">
                             <thead>
                                 <tr>
+                                    <th style={{ width: '40px', textAlign: 'center' }}>
+                                        <input 
+                                            type="checkbox"
+                                            checked={
+                                                users.filter(u => {
+                                                    const matchesSearch = u.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                                                                       u.email.toLowerCase().includes(searchQuery.toLowerCase());
+                                                    const matchesRole = userRoleFilter === 'all' || u.role === userRoleFilter;
+                                                    const matchesStatus = userStatusFilter === 'all' || u.status === userStatusFilter;
+                                                    return matchesSearch && matchesRole && matchesStatus;
+                                                }).length > 0 && selectedUsers.length === users.filter(u => {
+                                                    const matchesSearch = u.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                                                                       u.email.toLowerCase().includes(searchQuery.toLowerCase());
+                                                    const matchesRole = userRoleFilter === 'all' || u.role === userRoleFilter;
+                                                    const matchesStatus = userStatusFilter === 'all' || u.status === userStatusFilter;
+                                                    return matchesSearch && matchesRole && matchesStatus;
+                                                }).length
+                                            }
+                                            onChange={(e) => {
+                                                const filtered = users.filter(u => {
+                                                    const matchesSearch = u.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                                                                       u.email.toLowerCase().includes(searchQuery.toLowerCase());
+                                                    const matchesRole = userRoleFilter === 'all' || u.role === userRoleFilter;
+                                                    const matchesStatus = userStatusFilter === 'all' || u.status === userStatusFilter;
+                                                    return matchesSearch && matchesRole && matchesStatus;
+                                                });
+                                                if (e.target.checked) {
+                                                    setSelectedUsers(filtered.map(u => u.id));
+                                                } else {
+                                                    setSelectedUsers([]);
+                                                }
+                                            }}
+                                        />
+                                    </th>
                                     <th>Name</th>
                                     <th>Email</th>
                                     <th>Role</th>
@@ -1866,6 +2176,19 @@ const AdminDashboard = ({ user }) => {
                                     return matchesSearch && matchesRole && matchesStatus;
                                 }).map(u => (
                                     <tr key={u.id}>
+                                        <td style={{ textAlign: 'center' }}>
+                                            <input 
+                                                type="checkbox"
+                                                checked={selectedUsers.includes(u.id)}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setSelectedUsers([...selectedUsers, u.id]);
+                                                    } else {
+                                                        setSelectedUsers(selectedUsers.filter(id => id !== u.id));
+                                                    }
+                                                }}
+                                            />
+                                        </td>
                                         <td>
                                             <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
                                                 <div className="astro-mini-avatar" style={{ background: u.role === 'ASTROLOGER' ? 'var(--gold-gradient)' : 'rgba(255,255,255,0.1)' }}>{u.name?.charAt(0) || 'U'}</div>
@@ -1885,10 +2208,24 @@ const AdminDashboard = ({ user }) => {
                                             <div style={{ display: 'flex', gap: '0.6rem' }}>
                                                 <button className="btn btn-outline btn-sm" style={{ padding: '0.4rem 0.7rem' }} title="View Profile" onClick={() => { setViewAstro(u); setAstroDetailOpen(true); }}><User size={16} /></button>
                                                 <button 
+                                                    className="btn btn-outline btn-sm" 
+                                                    style={{ padding: '0.4rem 0.7rem', borderColor: 'var(--secondary-color)', color: 'var(--secondary-color)' }} 
+                                                    title="Password Management" 
+                                                    onClick={() => {
+                                                        setPasswordResetUser(u);
+                                                        setNewPasswordVal('');
+                                                        setPasswordSuccess('');
+                                                        setPasswordError('');
+                                                        setPasswordResetModal(true);
+                                                    }}
+                                                >
+                                                    <Key size={16} />
+                                                </button>
+                                                <button 
                                                     className="btn btn-sm" 
                                                     style={{ 
                                                         padding: '0.4rem 1rem', 
-                                                        minWidth: '100px', 
+                                                        minWidth: '90px', 
                                                         fontWeight: 700, 
                                                         fontSize: '0.75rem',
                                                         background: u.status === 'active' ? 'rgba(255,74,74,0.12)' : 'rgba(28,200,138,0.2)', 
@@ -1898,6 +2235,14 @@ const AdminDashboard = ({ user }) => {
                                                     onClick={() => toggleUserStatus(u.id)}
                                                 >
                                                     {u.status === 'active' ? 'SUSPEND' : 'ACTIVATE'}
+                                                </button>
+                                                <button 
+                                                    className="btn btn-outline btn-sm" 
+                                                    style={{ padding: '0.4rem 0.7rem', borderColor: '#ff4a4a', color: '#ff4a4a' }} 
+                                                    title="Delete User" 
+                                                    onClick={() => deleteUser(u.id)}
+                                                >
+                                                    <Trash2 size={16} />
                                                 </button>
                                             </div>
                                         </td>

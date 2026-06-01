@@ -283,12 +283,19 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
         }
         const token = localStorage.getItem('token');
         
+        const baseAmt = parseFloat(addFunds);
+        const convenienceRate = platformSettings?.convenienceRate || 0;
+        const gstRate = platformSettings?.gstRate || 0;
+        const convenienceFee = baseAmt * (convenienceRate / 100);
+        const gstFee = convenienceFee * (gstRate / 100);
+        const totalPayable = +(baseAmt + convenienceFee + gstFee).toFixed(2);
+        
         try {
-            // 1. Create Order on Backend
+            // 1. Create Order on Backend (use totalPayable)
             const orderRes = await fetch(`${API_URL}/api/finance/razorpay/order`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ amount: parseFloat(addFunds) })
+                body: JSON.stringify({ amount: totalPayable })
             });
             
             if (!orderRes.ok) {
@@ -296,7 +303,7 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
                 throw new Error(errData.error || "Order creation failed");
             }
             const order = await orderRes.json();
-
+ 
             // 2. Open Razorpay Checkout (or simulate if mock keys are configured)
             if (order.isMock) {
                 console.log("🛡️ rootsastro Sandbox: Simulating top-up verification.");
@@ -305,28 +312,28 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
                     razorpay_payment_id: `pay_mock_${Math.random().toString(36).slice(2, 10).toUpperCase()}`,
                     razorpay_signature: "sandbox_mock_signature"
                 };
-
+ 
                 const verifyRes = await fetch(`${API_URL}/api/finance/razorpay/verify`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                     body: JSON.stringify({
                         ...response,
-                        amount: parseFloat(addFunds)
+                        amount: baseAmt
                     })
                 });
-
+ 
                 if (verifyRes.ok) {
                     const data = await verifyRes.json();
                     setWalletBalance(data.balance);
                     setAddFunds('');
                     fetchWalletStats();
-                    alert("🎉 rootsastro Sandbox: ₹" + parseFloat(addFunds).toFixed(2) + " successfully credited to your wallet (Demo Checkout)!");
+                    alert("🎉 rootsastro Sandbox: ₹" + totalPayable.toFixed(2) + " successfully paid (₹" + baseAmt.toFixed(2) + " credited to your wallet balance)!");
                 } else {
                     alert("Sandbox verification failed");
                 }
                 return;
             }
-
+ 
             const options = {
                 key: platformSettings.razorpayKeyId || "rzp_test_U8N0Y3vP9m1Q2X",
                 amount: order.amount,
@@ -335,16 +342,16 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
                 description: "Wallet Top-up",
                 order_id: order.id,
                 handler: async function (response) {
-                    // 3. Verify Payment
+                    // 3. Verify Payment (credit only baseAmt to wallet)
                     const verifyRes = await fetch(`${API_URL}/api/finance/razorpay/verify`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                         body: JSON.stringify({
                             ...response,
-                            amount: parseFloat(addFunds)
+                            amount: baseAmt
                         })
                     });
-
+ 
                     if (verifyRes.ok) {
                         const data = await verifyRes.json();
                         setWalletBalance(data.balance);
@@ -362,10 +369,10 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
                 },
                 theme: { color: "#2D1E4D" }
             };
-
+ 
             const rzp = new window.Razorpay(options);
             rzp.open();
-
+ 
         } catch (err) { 
             console.error("Top-up failed", err); 
             alert("Something went wrong with the payment. Please try again.");
@@ -1346,9 +1353,64 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
                                         onClick={handleAddFunds} 
                                         disabled={!addFunds || parseFloat(addFunds) <= 0}
                                     >
-                                        <Zap size={18} fill="currentColor" /> Top-up Now
+                                        <Zap size={18} fill="currentColor" /> {(() => {
+                                            const baseAmt = parseFloat(addFunds) || 0;
+                                            const convenienceRate = platformSettings?.convenienceRate || 0;
+                                            const gstRate = platformSettings?.gstRate || 0;
+                                            const convenienceFee = +(baseAmt * (convenienceRate / 100)).toFixed(2);
+                                            const gstFee = +(convenienceFee * (gstRate / 100)).toFixed(2);
+                                            const totalPayableTopup = +(baseAmt + convenienceFee + gstFee).toFixed(2);
+                                            return baseAmt > 0 ? `Pay ${currencySymbol}${totalPayableTopup.toFixed(2)}` : 'Top-up Now';
+                                        })()}
                                     </button>
                                 </div>
+
+                                {(() => {
+                                    const baseAmt = parseFloat(addFunds) || 0;
+                                    const convenienceRate = platformSettings?.convenienceRate || 0;
+                                    const gstRate = platformSettings?.gstRate || 0;
+                                    const convenienceFee = +(baseAmt * (convenienceRate / 100)).toFixed(2);
+                                    const gstFee = +(convenienceFee * (gstRate / 100)).toFixed(2);
+                                    const totalPayableTopup = +(baseAmt + convenienceFee + gstFee).toFixed(2);
+                                    
+                                    if (baseAmt <= 0) return null;
+                                    
+                                    return (
+                                        <div className="fade-in" style={{
+                                            marginTop: '1.25rem',
+                                            padding: '1rem',
+                                            borderRadius: '12px',
+                                            border: '1px solid var(--glass-border)',
+                                            background: 'rgba(255,255,255,0.01)',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            gap: '0.5rem',
+                                            fontSize: '0.85rem'
+                                        }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)' }}>
+                                                <span>Top-up Amount</span>
+                                                <strong>{currencySymbol}{baseAmt.toFixed(2)}</strong>
+                                            </div>
+                                            {convenienceRate > 0 && (
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)' }}>
+                                                    <span>Convenience Charge ({convenienceRate}%)</span>
+                                                    <strong>{currencySymbol}{convenienceFee.toFixed(2)}</strong>
+                                                </div>
+                                            )}
+                                            {gstRate > 0 && convenienceRate > 0 && (
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)' }}>
+                                                    <span>GST on Convenience ({gstRate}%)</span>
+                                                    <strong>{currencySymbol}{gstFee.toFixed(2)}</strong>
+                                                </div>
+                                            )}
+                                            <div style={{ height: '1px', background: 'var(--glass-border)', margin: '0.25rem 0' }} />
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '1rem' }}>
+                                                <span>Total Payable Amount</span>
+                                                <span style={{ color: 'var(--secondary-color)' }}>{currencySymbol}{totalPayableTopup.toFixed(2)}</span>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
                                 
                                 <div className="payment-support-icons">
                                     <span>Accepting:</span>

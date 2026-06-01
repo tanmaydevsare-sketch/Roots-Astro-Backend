@@ -534,7 +534,7 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance 
                             <div className="wizard-actions">
                                 <button className="btn btn-outline btn-sm" onClick={() => setStep(3)}>Back</button>
                                 <button className="btn btn-primary" onClick={initiatePayment} disabled={!paymentMethod} style={{ gap: '0.5rem' }}>
-                                    <CreditCard size={15} /> Pay {currencySymbol}{price.toFixed(2)} {paymentMethod === 'razorpay' ? 'via Razorpay' : paymentMethod === 'paypal' ? 'via PayPal' : ''}
+                                    <CreditCard size={15} /> Pay {currencySymbol}{totalPrice.toFixed(2)} {paymentMethod === 'razorpay' ? 'via Razorpay' : paymentMethod === 'paypal' ? 'via PayPal' : ''}
                                 </button>
                             </div>
                         </>

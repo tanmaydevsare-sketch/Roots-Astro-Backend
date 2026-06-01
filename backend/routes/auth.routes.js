@@ -478,8 +478,131 @@ router.patch('/admin/users/:id/status', authMiddleware, roleMiddleware(['ADMIN']
  */
 router.delete('/admin/users/:id', authMiddleware, roleMiddleware(['ADMIN']), async (req, res) => {
   try {
-    await prisma.user.delete({ where: { id: parseInt(req.params.id) } });
+    const userId = parseInt(req.params.id);
+    await prisma.$transaction(async (tx) => {
+      // Safely delete dependent tables
+      await tx.astrologerProfile.deleteMany({ where: { userId } });
+      await tx.clientProfile.deleteMany({ where: { userId } });
+      
+      const wallets = await tx.wallet.findMany({ where: { userId } });
+      const walletIds = wallets.map(w => w.id);
+      await tx.transaction.deleteMany({ where: { walletId: { in: walletIds } } });
+      await tx.wallet.deleteMany({ where: { userId } });
+      
+      await tx.withdrawal.deleteMany({ where: { userId } });
+      await tx.auditLog.deleteMany({ where: { userId } });
+      await tx.booking.deleteMany({
+        where: {
+          OR: [
+            { clientId: userId },
+            { astrologerId: userId }
+          ]
+        }
+      });
+      await tx.user.delete({ where: { id: userId } });
+    });
     res.json({ message: 'User deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /api/auth/admin/users/bulk-delete:
+ *   post:
+ *     tags: [Admin]
+ *     summary: Bulk delete users
+ *     security:
+ *       - bearerAuth: []
+ */
+router.post('/admin/users/bulk-delete', authMiddleware, roleMiddleware(['ADMIN']), async (req, res) => {
+  const { ids } = req.body;
+  try {
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'Invalid user IDs' });
+    }
+    const userIds = ids.map(id => parseInt(id));
+    await prisma.$transaction(async (tx) => {
+      await tx.astrologerProfile.deleteMany({ where: { userId: { in: userIds } } });
+      await tx.clientProfile.deleteMany({ where: { userId: { in: userIds } } });
+      
+      const wallets = await tx.wallet.findMany({ where: { userId: { in: userIds } } });
+      const walletIds = wallets.map(w => w.id);
+      await tx.transaction.deleteMany({ where: { walletId: { in: walletIds } } });
+      await tx.wallet.deleteMany({ where: { userId: { in: userIds } } });
+      
+      await tx.withdrawal.deleteMany({ where: { userId: { in: userIds } } });
+      await tx.auditLog.deleteMany({ where: { userId: { in: userIds } } });
+      await tx.booking.deleteMany({
+        where: {
+          OR: [
+            { clientId: { in: userIds } },
+            { astrologerId: { in: userIds } }
+          ]
+        }
+      });
+      await tx.user.deleteMany({ where: { id: { in: userIds } } });
+    });
+    res.json({ message: 'Users deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /api/auth/admin/users/bulk-status:
+ *   post:
+ *     tags: [Admin]
+ *     summary: Bulk update user status
+ *     security:
+ *       - bearerAuth: []
+ */
+router.post('/admin/users/bulk-status', authMiddleware, roleMiddleware(['ADMIN']), async (req, res) => {
+  const { ids, status } = req.body;
+  try {
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'Invalid user IDs' });
+    }
+    if (status !== 'active' && status !== 'suspended') {
+      return res.status(400).json({ error: 'Invalid status' });
+    }
+    const userIds = ids.map(id => parseInt(id));
+    await prisma.user.updateMany({
+      where: { id: { in: userIds } },
+      data: { status }
+    });
+    res.json({ message: 'Users status updated successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /api/auth/admin/users/{id}/reset-password:
+ *   post:
+ *     tags: [Admin]
+ *     summary: Admin reset user password
+ *     security:
+ *       - bearerAuth: []
+ */
+router.post('/admin/users/:id/reset-password', authMiddleware, roleMiddleware(['ADMIN']), async (req, res) => {
+  const { newPassword } = req.body;
+  try {
+    if (!newPassword || newPassword.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({
+      where: { id: parseInt(req.params.id) },
+      data: {
+        password: hashedPassword,
+        isPasswordSet: true
+      }
+    });
+    res.json({ message: 'Password reset successfully' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
