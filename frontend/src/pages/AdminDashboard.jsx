@@ -46,6 +46,22 @@ const AdminDashboard = ({ user }) => {
     const [svcSaved, setSvcSaved] = useState(false);
     const [catSaved, setCatSaved] = useState(false);
 
+    // ── Bulk & Multiselect State ──
+    const [selectedCategories, setSelectedCategories] = useState([]);
+    const [selectedServices, setSelectedServices] = useState([]);
+    const [bulkModal, setBulkModal] = useState(false);
+    const [bulkType, setBulkType] = useState('categories'); // 'categories' or 'services'
+    const [bulkText, setBulkText] = useState('');
+    const [bulkFile, setBulkFile] = useState(null);
+    const [bulkPreview, setBulkPreview] = useState([]);
+    const [bulkErrors, setBulkErrors] = useState([]);
+
+    // Advanced Bulk Importer Columns Separation & Mapping States
+    const [bulkDelimiter, setBulkDelimiter] = useState('\t'); // Default Tab
+    const [parsedRawRows, setParsedRawRows] = useState([]); // Raw 2D array
+    const [columnMappings, setColumnMappings] = useState([]); // Field mapping strings for each column index
+
+
     const checkAuthError = (res) => {
         if (res.status === 401 || res.status === 403) {
             console.error(`[AUTH ERROR] Request to ${res.url} failed with status ${res.status}`);
@@ -125,6 +141,298 @@ const AdminDashboard = ({ user }) => {
             if (res.ok) fetchCategories();
         } catch (err) { console.error("Delete category failed", err); }
     };
+
+    const deleteSelectedCategories = async () => {
+        if (!selectedCategories.length) return;
+        if (!window.confirm(`Are you sure you want to delete the ${selectedCategories.length} selected categories?`)) return;
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch(`${API_URL}/api/admin/categories/bulk-delete`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ ids: selectedCategories })
+            });
+            if (res.ok) {
+                fetchCategories();
+                setSelectedCategories([]);
+            } else {
+                const err = await res.json();
+                alert(`Error deleting categories: ${err.error || 'Unknown error'}`);
+            }
+        } catch (err) { console.error("Bulk delete categories failed", err); }
+    };
+
+    const deleteSelectedServices = async () => {
+        if (!selectedServices.length) return;
+        if (!window.confirm(`Are you sure you want to delete the ${selectedServices.length} selected master services?`)) return;
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch(`${API_URL}/api/admin/master-services/bulk-delete`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ ids: selectedServices })
+            });
+            if (res.ok) {
+                fetchPlatformServices();
+                setSelectedServices([]);
+            } else {
+                const err = await res.json();
+                alert(`Error deleting master services: ${err.error || 'Unknown error'}`);
+            }
+        } catch (err) { console.error("Bulk delete services failed", err); }
+    };
+
+    const updateSelectedCategoriesStatus = async (active) => {
+        if (!selectedCategories.length) return;
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch(`${API_URL}/api/admin/categories/bulk-status`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ ids: selectedCategories, active })
+            });
+            if (res.ok) {
+                fetchCategories();
+                setSelectedCategories([]);
+            } else {
+                const err = await res.json();
+                alert(`Error updating category status: ${err.error || 'Unknown error'}`);
+            }
+        } catch (err) { console.error("Bulk category status update failed", err); }
+    };
+
+    const updateSelectedServicesStatus = async (active) => {
+        if (!selectedServices.length) return;
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch(`${API_URL}/api/admin/master-services/bulk-status`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ ids: selectedServices, active })
+            });
+            if (res.ok) {
+                fetchPlatformServices();
+                setSelectedServices([]);
+            } else {
+                const err = await res.json();
+                alert(`Error updating services status: ${err.error || 'Unknown error'}`);
+            }
+        } catch (err) { console.error("Bulk service status update failed", err); }
+    };
+
+    const moveSelectedServicesCategory = async (categoryId) => {
+        if (!selectedServices.length || !categoryId) return;
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch(`${API_URL}/api/admin/master-services/bulk-category`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ ids: selectedServices, categoryId: parseInt(categoryId) })
+            });
+            if (res.ok) {
+                fetchPlatformServices();
+                setSelectedServices([]);
+            } else {
+                const err = await res.json();
+                alert(`Error moving services: ${err.error || 'Unknown error'}`);
+            }
+        } catch (err) { console.error("Bulk service category move failed", err); }
+    };
+
+    const handlePaste = (e) => {
+        const text = e.clipboardData ? e.clipboardData.getData('text') : bulkText;
+        parsePastedText(text);
+    };
+
+    const initializeMappings = (maxCols, type = bulkType) => {
+        const mappings = [];
+        for (let i = 0; i < maxCols; i++) {
+            if (type === 'categories') {
+                if (i === 0) mappings.push('name');
+                else if (i === 1) mappings.push('description');
+                else if (i === 2) mappings.push('active');
+                else mappings.push('skip');
+            } else {
+                if (i === 0) mappings.push('name');
+                else if (i === 1) mappings.push('categoryName');
+                else if (i === 2) mappings.push('description');
+                else if (i === 3) mappings.push('active');
+                else mappings.push('skip');
+            }
+        }
+        setColumnMappings(mappings);
+    };
+
+    const parsePastedText = (text, delimiter = bulkDelimiter) => {
+        if (!text.trim()) {
+            setParsedRawRows([]);
+            return;
+        }
+        
+        const lines = text.split('\n');
+        const rawRows = [];
+        let maxCols = 0;
+        
+        lines.forEach(line => {
+            const cells = line.split(delimiter).map(cell => cell.trim());
+            if (cells.length > maxCols) maxCols = cells.length;
+            rawRows.push(cells);
+        });
+
+        setParsedRawRows(rawRows);
+        initializeMappings(maxCols);
+    };
+
+    const handleDelimiterChange = (newDel) => {
+        setBulkDelimiter(newDel);
+        if (bulkText.trim()) {
+            parsePastedText(bulkText, newDel);
+        }
+    };
+
+    const handleFileUpload = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        setBulkFile(file);
+        
+        const reader = new FileReader();
+        reader.onload = async (evt) => {
+            try {
+                const bstr = evt.target.result;
+                const XLSX = await import('xlsx');
+                const wb = XLSX.read(bstr, { type: 'binary' });
+                const wsname = wb.SheetNames[0];
+                const ws = wb.Sheets[wsname];
+                
+                const rawJson = XLSX.utils.sheet_to_json(ws, { header: 1 });
+                
+                if (rawJson.length === 0) {
+                    setBulkErrors(['Excel file is empty.']);
+                    setParsedRawRows([]);
+                    return;
+                }
+                
+                const rawRows = rawJson.filter(row => row && row.length > 0);
+                
+                // Determine if first row is a header row (e.g. contains 'name' or 'category')
+                let dataRows = rawRows;
+                if (rawRows.length > 1) {
+                    const firstRowStr = rawRows[0].map(c => c ? c.toString().toLowerCase() : '');
+                    if (firstRowStr.some(s => s.includes('name') || s.includes('category') || s.includes('description'))) {
+                        dataRows = rawRows.slice(1);
+                    }
+                }
+                
+                let maxCols = 0;
+                dataRows.forEach(row => {
+                    if (row.length > maxCols) maxCols = row.length;
+                });
+                
+                setParsedRawRows(dataRows);
+                initializeMappings(maxCols);
+            } catch (err) {
+                console.error("Excel parse error", err);
+                setBulkErrors([`Failed to parse Excel file: ${err.message}`]);
+                setParsedRawRows([]);
+            }
+        };
+        reader.readAsBinaryString(file);
+    };
+
+    // Auto-Process Raw Rows into Final Preview Objects using Selected Column Mappings
+    useEffect(() => {
+        if (parsedRawRows.length === 0) {
+            setBulkPreview([]);
+            setBulkErrors([]);
+            return;
+        }
+
+        const data = [];
+        const errors = [];
+
+        parsedRawRows.forEach((row, rowIndex) => {
+            if (row.length === 0 || row.every(cell => cell === undefined || cell === null || cell === '')) return;
+
+            const obj = { name: '', description: '', categoryName: '', active: true };
+            
+            row.forEach((cell, colIndex) => {
+                const mapping = columnMappings[colIndex] || 'skip';
+                if (mapping === 'skip') return;
+
+                const val = cell !== undefined && cell !== null ? cell.toString().trim() : '';
+                if (mapping === 'active') {
+                    obj.active = val.toLowerCase() !== 'false' && val !== '0' && val !== '';
+                } else {
+                    obj[mapping] = val;
+                }
+            });
+
+            // Validation
+            if (bulkType === 'categories') {
+                if (!obj.name) {
+                    errors.push(`Row ${rowIndex + 1}: Name is required.`);
+                }
+            } else {
+                if (!obj.name) {
+                    errors.push(`Row ${rowIndex + 1}: Name is required.`);
+                }
+                if (!obj.categoryName) {
+                    errors.push(`Row ${rowIndex + 1}: Category is required.`);
+                } else {
+                    const catLower = obj.categoryName.toLowerCase().trim();
+                    const exists = categories.some(c => c.name.toLowerCase().trim() === catLower);
+                    if (!exists) {
+                        errors.push(`Row ${rowIndex + 1}: Category "${obj.categoryName}" does not exist in Category Builder.`);
+                    }
+                }
+            }
+
+            data.push(obj);
+        });
+
+        setBulkPreview(data);
+        setBulkErrors(errors);
+    }, [parsedRawRows, columnMappings, bulkType, categories]);
+
+    const submitBulkUpload = async () => {
+        if (bulkErrors.length > 0) {
+            if (!window.confirm("There are validation errors (e.g. missing categories). Only rows with valid existing categories will succeed. Proceed anyway?")) {
+                return;
+            }
+        }
+        if (bulkPreview.length === 0) return;
+        
+        const token = localStorage.getItem('token');
+        const endpoint = bulkType === 'categories' ? '/api/admin/categories/bulk-upload' : '/api/admin/master-services/bulk-upload';
+        
+        try {
+            const res = await fetch(`${API_URL}${endpoint}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ data: bulkPreview })
+            });
+            
+            const result = await res.json();
+            if (res.ok) {
+                alert(result.message || 'Import completed successfully!');
+                if (bulkType === 'categories') fetchCategories();
+                else fetchPlatformServices();
+                setBulkModal(false);
+                setBulkPreview([]);
+                setBulkErrors([]);
+                setBulkText('');
+                setBulkFile(null);
+                setParsedRawRows([]);
+            } else {
+                alert(`Import failed: ${result.error || 'Unknown error'}`);
+            }
+        } catch (err) {
+            console.error("Bulk upload failed", err);
+            alert("Error submitting bulk upload.");
+        }
+    };
+
+
     const toggleSvc = async (id) => {
         const svc = platformServices.find(s => s.id === id);
         const token = localStorage.getItem('token');
@@ -999,6 +1307,144 @@ const AdminDashboard = ({ user }) => {
                 </div>
             </Modal>
 
+            {/* ── Bulk Import Excel/Paste Modal ── */}
+            <Modal isOpen={bulkModal} onClose={() => setBulkModal(false)} title={`Bulk Import ${bulkType === 'categories' ? 'Categories' : 'Services'}`} width="850px">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                    <div className="fee-transparency-note" style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.82rem' }}>
+                        <div><strong>Visual Data Importer & Column Alignment Wizard:</strong></div>
+                        <div>Align your parsed columns by choosing the correct field dropdown above each preview column. Skipped columns will not be uploaded.</div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                            <label className="form-label">Option A: Upload Excel (.xlsx) / CSV file</label>
+                            <div style={{ border: '2px dashed var(--glass-border)', padding: '1.5rem', borderRadius: '10px', textAlign: 'center', background: 'rgba(255,255,255,0.01)' }}>
+                                <input type="file" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} style={{ display: 'none' }} id="excel-file-input" />
+                                <label htmlFor="excel-file-input" className="btn btn-outline btn-sm" style={{ cursor: 'pointer', margin: '0 auto' }}>
+                                    Choose Excel/CSV File
+                                </label>
+                                {bulkFile && <p style={{ fontSize: '0.8rem', color: 'var(--secondary-color)', marginTop: '0.5rem', marginBottom: 0 }}>✓ {bulkFile.name}</p>}
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <label className="form-label">Option B: Copy-Paste directly from Excel/Sheets</label>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Separator:</span>
+                                    <select 
+                                        value={bulkDelimiter} 
+                                        onChange={e => handleDelimiterChange(e.target.value)} 
+                                        className="form-input" 
+                                        style={{ width: '90px', padding: '0.1rem 0.3rem', height: '22px', fontSize: '0.75rem', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--glass-border)', color: '#fff' }}
+                                    >
+                                        <option value="\t">Tab</option>
+                                        <option value=",">Comma (,)</option>
+                                        <option value=";">Semicolon (;)</option>
+                                        <option value=" ">Space</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <textarea 
+                                className="form-input" 
+                                rows={4} 
+                                placeholder={`Paste cells here (Ctrl+V)...\ne.g.\nService A\tPalmistry\tAmazing palm readings\tTrue`}
+                                value={bulkText}
+                                onChange={e => { setBulkText(e.target.value); parsePastedText(e.target.value); }}
+                                onPaste={handlePaste}
+                                style={{ fontSize: '0.82rem', fontFamily: 'monospace' }}
+                            />
+                        </div>
+                    </div>
+
+                    {bulkErrors.length > 0 && (
+                        <div style={{ maxHeight: '120px', overflowY: 'auto', background: 'rgba(255,74,74,0.08)', border: '1px solid rgba(255,74,74,0.2)', padding: '0.75rem', borderRadius: '8px' }}>
+                            <strong style={{ color: '#ff6b6b', fontSize: '0.85rem', display: 'block', marginBottom: '0.25rem' }}>Validation Errors Found:</strong>
+                            <ul style={{ margin: 0, paddingLeft: '1.25rem', color: 'var(--text-muted)', fontSize: '0.8rem', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                                {bulkErrors.map((err, idx) => <li key={idx} style={{ color: '#ff8585' }}>{err}</li>)}
+                            </ul>
+                        </div>
+                    )}
+
+                    {parsedRawRows.length > 0 && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <strong style={{ fontSize: '0.9rem' }}>Verify Column Mapping & Separation:</strong>
+                                <span style={{ fontSize: '0.78rem', color: 'var(--secondary-color)' }}>
+                                    ✓ Parsed {parsedRawRows.length} rows successfully.
+                                </span>
+                            </div>
+
+                            <div style={{ maxHeight: '250px', overflow: 'auto', border: '1px solid var(--glass-border)', borderRadius: '8px', background: 'rgba(0,0,0,0.15)' }}>
+                                <table className="data-table" style={{ margin: 0, fontSize: '0.82rem' }}>
+                                    <thead>
+                                        {/* Dropdown mapping row */}
+                                        <tr style={{ background: 'rgba(255,255,255,0.02)' }}>
+                                            <th style={{ width: '60px', color: 'var(--text-muted)' }}>Map To:</th>
+                                            {columnMappings.map((mapping, colIndex) => (
+                                                <th key={colIndex}>
+                                                    <select 
+                                                        className="form-input" 
+                                                        style={{ padding: '0.15rem 0.35rem', fontSize: '0.78rem', height: '24px', background: 'var(--site-accent-color)', color: '#fff', border: 'none', borderRadius: '4px' }}
+                                                        value={mapping}
+                                                        onChange={(e) => {
+                                                            const newMap = [...columnMappings];
+                                                            newMap[colIndex] = e.target.value;
+                                                            setColumnMappings(newMap);
+                                                        }}
+                                                    >
+                                                        <option value="skip">❌ [Skip Column]</option>
+                                                        <option value="name">🏷️ Name</option>
+                                                        {bulkType === 'services' && <option value="categoryName">📁 Category Name</option>}
+                                                        <option value="description">📝 Description</option>
+                                                        <option value="active">💡 Active State</option>
+                                                    </select>
+                                                </th>
+                                            ))}
+                                        </tr>
+                                        {/* Header labels */}
+                                        <tr>
+                                            <th>Row #</th>
+                                            {columnMappings.map((_, colIndex) => (
+                                                <th key={colIndex} style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                                    Column {colIndex + 1}
+                                                </th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {parsedRawRows.slice(0, 5).map((row, idx) => (
+                                            <tr key={idx}>
+                                                <td style={{ color: 'var(--text-muted)' }}>#{idx + 1}</td>
+                                                {columnMappings.map((_, colIndex) => (
+                                                    <td key={colIndex}>
+                                                        {row[colIndex] !== undefined && row[colIndex] !== null ? row[colIndex].toString() : ''}
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {parsedRawRows.length > 5 && (
+                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'right', marginTop: '-0.25rem' }}>
+                                    * Showing first 5 preview rows.
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    <div style={{ display: 'flex', gap: '1rem', paddingTop: '0.5rem', borderTop: '1px solid var(--glass-border)' }}>
+                        <button className="btn btn-primary" onClick={submitBulkUpload} disabled={bulkPreview.length === 0}>
+                            ✓ Import {bulkPreview.length} Items
+                        </button>
+                        <button className="btn btn-outline" onClick={() => { setBulkModal(false); setBulkPreview([]); setBulkErrors([]); setBulkText(''); setBulkFile(null); setParsedRawRows([]); }}>
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </Modal>
+
             {/* ═══ CATEGORY BUILDER ═══ */}
             {tab === 'categories' && (
                 <div className="fade-in">
@@ -1009,29 +1455,88 @@ const AdminDashboard = ({ user }) => {
                                 Define expertise categories for the platform. These organize services and help clients find experts.
                             </p>
                         </div>
-                        <button className="btn btn-primary btn-sm" onClick={openAddCat}>
-                            <Tag size={15} /> Add New Category
-                        </button>
+                        <div style={{ display: 'flex', gap: '1rem' }}>
+                            {selectedCategories.length > 0 && (
+                                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', background: 'rgba(255,255,255,0.02)', padding: '0.35rem 0.75rem', borderRadius: '10px', border: '1px solid var(--glass-border)' }}>
+                                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Bulk Actions:</span>
+                                    <button className="btn btn-xs btn-outline" onClick={() => updateSelectedCategoriesStatus(true)}>
+                                        Make Active
+                                    </button>
+                                    <button className="btn btn-xs btn-outline" onClick={() => updateSelectedCategoriesStatus(false)}>
+                                        Make Inactive
+                                    </button>
+                                    <button className="btn btn-xs" style={{ background: 'var(--error)', color: '#fff', height: '28px', display: 'flex', alignItems: 'center' }} onClick={deleteSelectedCategories}>
+                                        <Trash2 size={12} style={{ marginRight: '0.25rem' }} /> Delete ({selectedCategories.length})
+                                    </button>
+                                </div>
+                            )}
+                            <button className="btn btn-outline btn-sm" onClick={() => { setBulkType('categories'); setBulkModal(true); setBulkPreview([]); setBulkErrors([]); setBulkText(''); setBulkFile(null); }}>
+                                <Save size={15} /> Bulk Import Excel/Paste
+                            </button>
+                            <button className="btn btn-primary btn-sm" onClick={openAddCat}>
+                                <Tag size={15} /> Add New Category
+                            </button>
+                        </div>
                     </div>
 
                     {catSaved && <div className="fee-transparency-note" style={{ marginBottom: '1.25rem' }}>✓ Category list updated successfully.</div>}
 
-                    <div className="glass-card" style={{ padding: '1.5rem' }}>
-                        <h3 style={{ marginBottom: '1.25rem', fontSize: '1rem' }}>Global Expertise Categories</h3>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '1rem' }}>
-                            {categories.map(c => (
-                                <div key={c.id} className="glass-card" style={{ padding: '1rem', background: 'rgba(255,255,255,0.02)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <strong style={{ fontSize: '0.95rem' }}>{c.name}</strong>
-                                        <div style={{ display: 'flex', gap: '0.4rem' }}>
-                                            <button onClick={() => openEditCat(c)} className="btn btn-outline btn-xs" style={{ padding: '0.25rem' }}><Edit2 size={12} /></button>
-                                            <button onClick={() => deleteCat(c.id)} className="btn btn-outline btn-xs" style={{ padding: '0.25rem', color: 'var(--error)' }}><Trash2 size={12} /></button>
-                                        </div>
-                                    </div>
-                                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>{c.description || 'No description provided.'}</p>
-                                </div>
-                            ))}
-                        </div>
+                    <div className="glass-card">
+                        <table className="data-table">
+                            <thead>
+                                <tr>
+                                    <th style={{ width: '40px' }}>
+                                        <input 
+                                            type="checkbox" 
+                                            checked={categories.length > 0 && selectedCategories.length === categories.length} 
+                                            onChange={(e) => {
+                                                if (e.target.checked) {
+                                                    setSelectedCategories(categories.map(c => c.id));
+                                                } else {
+                                                    setSelectedCategories([]);
+                                                }
+                                            }} 
+                                        />
+                                    </th>
+                                    <th>Category Name</th>
+                                    <th>Description</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {categories.map(c => (
+                                    <tr key={c.id}>
+                                        <td>
+                                            <input 
+                                                type="checkbox" 
+                                                checked={selectedCategories.includes(c.id)} 
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setSelectedCategories([...selectedCategories, c.id]);
+                                                    } else {
+                                                        setSelectedCategories(selectedCategories.filter(id => id !== c.id));
+                                                    }
+                                                }}
+                                            />
+                                        </td>
+                                        <td><strong>{c.name}</strong></td>
+                                        <td style={{ color: 'var(--text-muted)', fontSize: '0.83rem' }}>{c.description || 'No description provided.'}</td>
+                                        <td>
+                                            <span className={`conn-badge ${c.active !== false ? 'connected' : 'error'}`}>
+                                                {c.active !== false ? 'Active' : 'Inactive'}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <div style={{ display: 'flex', gap: '0.6rem' }}>
+                                                <button className="btn btn-outline btn-sm" style={{ padding: '0.35rem 0.65rem' }} onClick={() => openEditCat(c)} title="Edit"><Edit2 size={14} /></button>
+                                                <button className="btn btn-sm" style={{ padding: '0.35rem 0.65rem', background: 'rgba(255,74,74,0.12)', color: 'var(--error)' }} onClick={() => deleteCat(c.id)} title="Delete"><Trash2 size={14} /></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                         {categories.length === 0 && (
                             <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
                                 <Tag size={32} style={{ opacity: 0.1, marginBottom: '1rem' }} />
@@ -1053,6 +1558,36 @@ const AdminDashboard = ({ user }) => {
                             </p>
                         </div>
                         <div style={{ display: 'flex', gap: '1rem' }}>
+                            {selectedServices.length > 0 && (
+                                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', background: 'rgba(255,255,255,0.02)', padding: '0.35rem 0.75rem', borderRadius: '10px', border: '1px solid var(--glass-border)' }}>
+                                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Bulk Actions:</span>
+                                    <button className="btn btn-xs btn-outline" onClick={() => updateSelectedServicesStatus(true)}>
+                                        Make Active
+                                    </button>
+                                    <button className="btn btn-xs btn-outline" onClick={() => updateSelectedServicesStatus(false)}>
+                                        Make Inactive
+                                    </button>
+                                    <select 
+                                        className="form-input" 
+                                        style={{ width: '150px', padding: '0.2rem 0.5rem', height: '28px', fontSize: '0.8rem', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'var(--text-color)' }}
+                                        onChange={(e) => {
+                                            if (e.target.value) {
+                                                moveSelectedServicesCategory(e.target.value);
+                                                e.target.value = ""; // Reset dropdown
+                                            }
+                                        }}
+                                    >
+                                        <option value="">Move Category...</option>
+                                        {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                    </select>
+                                    <button className="btn btn-xs" style={{ background: 'var(--error)', color: '#fff', height: '28px', display: 'flex', alignItems: 'center' }} onClick={deleteSelectedServices}>
+                                        <Trash2 size={12} style={{ marginRight: '0.25rem' }} /> Delete ({selectedServices.length})
+                                    </button>
+                                </div>
+                            )}
+                            <button className="btn btn-outline btn-sm" onClick={() => { setBulkType('services'); setBulkModal(true); setBulkPreview([]); setBulkErrors([]); setBulkText(''); setBulkFile(null); }}>
+                                <Save size={15} /> Bulk Import Excel/Paste
+                            </button>
                             <button className="btn btn-primary btn-sm" onClick={openAddSvc} style={{ whiteSpace: 'nowrap' }}>
                                 <Plus size={15} /> Add Service
                             </button>
@@ -1073,6 +1608,19 @@ const AdminDashboard = ({ user }) => {
                         <table className="data-table">
                             <thead>
                                 <tr>
+                                    <th style={{ width: '40px' }}>
+                                        <input 
+                                            type="checkbox" 
+                                            checked={platformServices.length > 0 && selectedServices.length === platformServices.length} 
+                                            onChange={(e) => {
+                                                if (e.target.checked) {
+                                                    setSelectedServices(platformServices.map(s => s.id));
+                                                } else {
+                                                    setSelectedServices([]);
+                                                }
+                                            }} 
+                                        />
+                                    </th>
                                     <th>Service Name</th>
                                     <th>Category</th>
                                     <th>Description</th>
@@ -1083,6 +1631,19 @@ const AdminDashboard = ({ user }) => {
                             <tbody>
                                 {platformServices.map(s => (
                                     <tr key={s.id}>
+                                        <td>
+                                            <input 
+                                                type="checkbox" 
+                                                checked={selectedServices.includes(s.id)} 
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setSelectedServices([...selectedServices, s.id]);
+                                                    } else {
+                                                        setSelectedServices(selectedServices.filter(id => id !== s.id));
+                                                    }
+                                                }}
+                                            />
+                                        </td>
                                         <td>
                                             <strong style={{ display: 'block' }}>{s.name}</strong>
                                         </td>
@@ -1832,10 +2393,10 @@ const AdminDashboard = ({ user }) => {
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                 <FormField label="Convenience Charge (%)">
-                                    <input className="form-input" type="number" step="0.01" value={settings.convenienceRate} onChange={e => setSettings({ ...settings, convenienceRate: parseFloat(e.target.value) || 0.0 })} />
+                                    <input className="form-input" type="number" step="0.01" value={settings.convenienceRate ?? 0.0} onChange={e => setSettings({ ...settings, convenienceRate: parseFloat(e.target.value) || 0.0 })} />
                                 </FormField>
                                 <FormField label="GST on Convenience (%)">
-                                    <input className="form-input" type="number" step="0.01" value={settings.gstRate} onChange={e => setSettings({ ...settings, gstRate: parseFloat(e.target.value) || 0.0 })} />
+                                    <input className="form-input" type="number" step="0.01" value={settings.gstRate ?? 0.0} onChange={e => setSettings({ ...settings, gstRate: parseFloat(e.target.value) || 0.0 })} />
                                 </FormField>
                             </div>
                             <FormField label="Support Email"><input className="form-input" type="email" value={settings.supportEmail} onChange={e => setSettings({ ...settings, supportEmail: e.target.value })} placeholder="support@rootsastro.com" /></FormField>
