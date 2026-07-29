@@ -18,7 +18,13 @@ function post(url, data) {
         const req = https.request(options, (res) => {
             let body = '';
             res.on('data', (chunk) => body += chunk);
-            res.on('end', () => resolve({ statusCode: res.statusCode, body: JSON.parse(body) }));
+            res.on('end', () => {
+                try {
+                    resolve({ statusCode: res.statusCode, body: JSON.parse(body) });
+                } catch (e) {
+                    resolve({ statusCode: res.statusCode, body });
+                }
+            });
         });
         
         req.on('error', reject);

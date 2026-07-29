@@ -24,7 +24,7 @@ const authMiddleware = async (req, res, next) => {
   // Fallback (for production/real JWT)
   try {
     const jwt = require('jsonwebtoken');
-    const secret = "supersecretjwtkey_astro_4b9a1c";
+    const secret = process.env.JWT_SECRET || "supersecretjwtkey_astro_4b9a1c";
 
     const decoded = jwt.verify(token, secret);
     const userId = Number(decoded.id);
@@ -44,6 +44,11 @@ const authMiddleware = async (req, res, next) => {
     req.user = { id: user.id, email: user.email, role: user.role.toUpperCase() };
     next();
   } catch (err) {
+    const isExpired = err.name === 'TokenExpiredError';
+    if (isExpired) {
+      console.warn(`[AUTH] Expired token received — client should re-login.`);
+      return res.status(401).json({ error: 'Session expired. Please log in again.', expired: true });
+    }
     console.error(`[AUTH] Token verification failed: ${err.message}`);
     res.status(401).json({ error: 'Invalid token' });
   }

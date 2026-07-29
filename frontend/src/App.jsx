@@ -21,11 +21,22 @@ const Guard = ({ user, allowed, children }) => {
 };
 
 function App() {
+  // ── Helper: decode JWT without a library ──────────────────────────────────
+  const isTokenExpired = (token) => {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload.exp && payload.exp * 1000 < Date.now();
+    } catch {
+      return true; // treat unparseable tokens as expired
+    }
+  };
+
   const [user, setUser] = useState(() => {
     try { 
       const u = JSON.parse(localStorage.getItem('rootsastro_user'));
       const t = localStorage.getItem('token');
-      if (u && t) return u;
+      // Clear stale/expired sessions on cold load
+      if (u && t && !isTokenExpired(t)) return u;
       localStorage.removeItem('rootsastro_user');
       localStorage.removeItem('token');
       return null;
@@ -37,6 +48,33 @@ function App() {
     if (window.location.hostname === 'roots-astro.web.app' || window.location.hostname === 'roots-astro.firebaseapp.com') {
       window.location.replace('https://rootsastro.com' + window.location.pathname + window.location.search + window.location.hash);
     }
+  }, []);
+
+  // ── Global 401 auto-logout interceptor ────────────────────────────────────
+  // Patches window.fetch so any API call returning {expired:true} auto-clears
+  // the session and redirects to login — no manual handling needed per page.
+  useEffect(() => {
+    const origFetch = window.fetch;
+    window.fetch = async (...args) => {
+      const response = await origFetch(...args);
+      if (response.status === 401) {
+        try {
+          const clone = response.clone();
+          const data = await clone.json();
+          if (data.expired) {
+            localStorage.removeItem('rootsastro_user');
+            localStorage.removeItem('token');
+            setUser(null);
+            // Small delay so current render cycle can finish
+            setTimeout(() => {
+              window.location.href = '/login';
+            }, 100);
+          }
+        } catch { /* ignore JSON parse errors on non-JSON 401s */ }
+      }
+      return response;
+    };
+    return () => { window.fetch = origFetch; };
   }, []);
 
   const login = (userData) => {

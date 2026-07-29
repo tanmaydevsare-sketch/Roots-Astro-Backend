@@ -49,16 +49,27 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // API Lockdown Middleware (Restricts external third-party API access when enabled)
+// Settings are cached in memory after first load to avoid a DB hit on every request.
+let _cachedSettings = undefined;
+let _settingsLastFetched = 0;
+const SETTINGS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+let _lockdownErrLogged = false;
+
 app.use(async (req, res, next) => {
   if (req.path === '/api/settings/public/global' || req.path === '/api/health' || req.path.startsWith('/api/docs')) {
     return next();
   }
 
   try {
-    const prisma = require('./config/prisma');
-    const settings = await prisma.globalSettings.findUnique({ where: { id: 1 } });
-    
-    if (settings && settings.apiLockdown) {
+    const now = Date.now();
+    if (_cachedSettings === undefined || now - _settingsLastFetched > SETTINGS_CACHE_TTL) {
+      const prisma = require('./config/prisma');
+      _cachedSettings = await prisma.globalSettings.findUnique({ where: { id: 1 } });
+      _settingsLastFetched = now;
+      _lockdownErrLogged = false; // reset on successful fetch
+    }
+
+    if (_cachedSettings && _cachedSettings.apiLockdown) {
       const origin = req.headers.origin || req.headers.referer;
       
       const isAllowedOrigin = !origin || 
@@ -74,10 +85,15 @@ app.use(async (req, res, next) => {
       }
     }
   } catch (err) {
-    console.error('[API LOCKDOWN] Error checking settings:', err);
+    if (!_lockdownErrLogged) {
+      console.warn('[API LOCKDOWN] Could not reach DB to check settings (requests will proceed normally):', err.message);
+      _lockdownErrLogged = true;
+    }
+    _cachedSettings = null; // treat as lockdown disabled when DB unreachable
   }
   next();
 });
+
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
