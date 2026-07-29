@@ -18,6 +18,7 @@ const AdminLogin = ({ onLogin }) => {
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const [serverWaking, setServerWaking] = useState(false);
 
     // Bootstrap specific fields
     const [firstName, setFirstName] = useState('');
@@ -28,8 +29,12 @@ const AdminLogin = ({ onLogin }) => {
         setChecking(true);
         setConnError(false);
         setError('');
+        setServerWaking(false);
+        const wakeTimer = setTimeout(() => setServerWaking(true), 5000);
         try {
             const res = await fetch(`${API_URL}/api/auth/admin/exists`);
+            clearTimeout(wakeTimer);
+            setServerWaking(false);
             if (res.ok) {
                 const data = await res.json();
                 setAdminExists(data.exists);
@@ -37,6 +42,8 @@ const AdminLogin = ({ onLogin }) => {
                 setConnError(true);
             }
         } catch (err) {
+            clearTimeout(wakeTimer);
+            setServerWaking(false);
             console.error("Failed to check admin existence:", err);
             setConnError(true);
         } finally {
@@ -52,6 +59,8 @@ const AdminLogin = ({ onLogin }) => {
         e.preventDefault();
         setError('');
         setLoading(true);
+        setServerWaking(false);
+        const wakeTimer = setTimeout(() => setServerWaking(true), 5000);
 
         try {
             const res = await fetch(`${API_URL}/api/auth/login`, {
@@ -59,6 +68,8 @@ const AdminLogin = ({ onLogin }) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password })
             });
+            clearTimeout(wakeTimer);
+            setServerWaking(false);
             const data = await res.json();
 
             if (res.ok) {
@@ -72,6 +83,8 @@ const AdminLogin = ({ onLogin }) => {
                 setError(data.error || 'Invalid admin credentials.');
             }
         } catch (err) {
+            clearTimeout(wakeTimer);
+            setServerWaking(false);
             console.error(err);
             setError('Unable to connect to the authentication server. Please check your network connection.');
         } finally {
@@ -129,6 +142,13 @@ const AdminLogin = ({ onLogin }) => {
                 <div className="login-card glass-card fade-in" style={{ width: '450px', padding: '3rem', position: 'relative', backdropFilter: 'blur(20px)', border: '1px solid rgba(255, 255, 255, 0.08)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                     <div style={{ width: '50px', height: '50px', borderRadius: '50%', border: '2px solid rgba(107, 144, 176, 0.1)', borderTop: '2px solid #6B90B0', animation: 'spin 1s linear infinite', marginBottom: '1.5rem' }} />
                     <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', letterSpacing: '0.05em' }}>Establishing secure handshake...</p>
+                    {serverWaking && (
+                        <div style={{ marginTop: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.6rem', background: 'rgba(107,144,176,0.08)', border: '1px solid rgba(107,144,176,0.25)', borderRadius: '10px', padding: '0.75rem 1rem', maxWidth: '320px', textAlign: 'center' }}>
+                            <span style={{ fontSize: '0.78rem', color: '#6B90B0', lineHeight: 1.5 }}>
+                                <strong>Waking up server…</strong> The backend is starting up — this may take up to 30 seconds. Please wait.
+                            </span>
+                        </div>
+                    )}
                 </div>
             </div>
         );
@@ -217,12 +237,22 @@ const AdminLogin = ({ onLogin }) => {
                     </div>
                 )}
 
+                {serverWaking && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', background: 'rgba(107,144,176,0.08)', border: '1px solid rgba(107,144,176,0.25)', borderRadius: '10px', padding: '0.85rem 1rem', marginBottom: '1.25rem' }}>
+                        <div style={{ width: 14, height: 14, border: '2px solid #6B90B0', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} />
+                        <span style={{ fontSize: '0.78rem', color: '#6B90B0', lineHeight: 1.4 }}>
+                            <strong>Waking up server…</strong> The backend is starting up. This may take up to 30 seconds on first access.
+                        </span>
+                    </div>
+                )}
+
                 {error && (
                     <div className="error-banner" style={{ display: 'flex', gap: '0.75rem', padding: '1rem', background: 'rgba(255, 74, 74, 0.1)', border: '1px solid rgba(255, 74, 74, 0.25)', borderRadius: '10px', color: '#ff6b6b', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
                         <AlertCircle size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
                         <span>{error}</span>
                     </div>
                 )}
+
 
                 {adminExists ? (
                     /* Render Standard Login Form */

@@ -23,6 +23,7 @@ const Login = ({ onLogin, portal = 'CLIENT' }) => {
     const [loading, setLoading] = useState(false);
     const [loginMethod, setLoginMethod] = useState('mobile'); // mobile or email (for clients)
     const [showFirebaseDomainNotice, setShowFirebaseDomainNotice] = useState(false);
+    const [serverWaking, setServerWaking] = useState(false); // Render cold-start indicator
 
     useEffect(() => {
         return () => {
@@ -72,6 +73,8 @@ const Login = ({ onLogin, portal = 'CLIENT' }) => {
             setLoading(false);
         } else {
             setLoading(true);
+            setServerWaking(false);
+            const wakeTimer = setTimeout(() => setServerWaking(true), 5000);
             try {
                 const result = await window.confirmationResult.confirm(otp);
                 const idToken = await result.user.getIdToken();
@@ -81,6 +84,8 @@ const Login = ({ onLogin, portal = 'CLIENT' }) => {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ idToken, role: portal })
                 });
+                clearTimeout(wakeTimer);
+                setServerWaking(false);
                 const data = await res.json();
                 if (res.ok) {
                     if (portal === 'ASTROLOGER' && data.user.role !== 'ASTROLOGER') {
@@ -91,8 +96,11 @@ const Login = ({ onLogin, portal = 'CLIENT' }) => {
                     navigate(PORTALS[portal].redirect);
                 } else setError(data.error || 'Verification failed on backend.');
             } catch (err) { 
+                clearTimeout(wakeTimer);
+                setServerWaking(false);
                 console.error(err);
-                setError(err.message || 'Invalid OTP or network error.'); 
+                const isNetwork = err.message?.includes('fetch') || err.message?.includes('network') || err.message?.includes('Failed to fetch');
+                setError(isNetwork ? 'Network error — please check your connection and try again.' : (err.message || 'Invalid OTP or network error.')); 
             }
             setLoading(false);
         }
@@ -102,12 +110,16 @@ const Login = ({ onLogin, portal = 'CLIENT' }) => {
         e.preventDefault();
         setError('');
         setLoading(true);
+        setServerWaking(false);
+        const wakeTimer = setTimeout(() => setServerWaking(true), 5000);
         try {
             const res = await fetch(`${API_URL}/api/auth/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password })
             });
+            clearTimeout(wakeTimer);
+            setServerWaking(false);
             const data = await res.json();
             if (res.ok) {
                 if (data.user.role !== portal) {
@@ -117,7 +129,11 @@ const Login = ({ onLogin, portal = 'CLIENT' }) => {
                 onLogin(data.user);
                 navigate(PORTALS[portal].redirect);
             } else setError(data.error || 'Invalid credentials.');
-        } catch { setError('Network error.'); }
+        } catch (err) {
+            clearTimeout(wakeTimer);
+            setServerWaking(false);
+            setError('Unable to reach the server. Please try again in a moment.');
+        }
         setLoading(false);
     };
 
@@ -253,6 +269,14 @@ const Login = ({ onLogin, portal = 'CLIENT' }) => {
                         </div>
                     )}
 
+                    {serverWaking && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', background: 'rgba(212,175,55,0.08)', border: '1px solid rgba(212,175,55,0.25)', borderRadius: '10px', padding: '0.85rem 1rem', marginTop: '1rem' }}>
+                            <div style={{ width: 14, height: 14, border: '2px solid #D4AF37', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} />
+                            <span style={{ fontSize: '0.78rem', color: '#D4AF37', lineHeight: 1.4 }}>
+                                <strong>Waking up server…</strong> This can take up to 30 seconds on first access. Please wait.
+                            </span>
+                        </div>
+                    )}
                     {!showFirebaseDomainNotice && error && <p className="form-error" style={{ textAlign: 'center', marginTop: '1rem' }}>{error}</p>}
                     <div id="recaptcha-container"></div>
                     

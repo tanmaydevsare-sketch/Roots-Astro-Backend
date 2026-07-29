@@ -138,4 +138,33 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📄 Swagger documentation available at http://localhost:${PORT}/api/docs`);
+
+  // ── Keep-Alive Ping (prevents Render free-tier from sleeping) ──────────────
+  // Pings /api/health every 14 minutes so the service never idles out.
+  // This keeps all roles (CLIENT, ASTROLOGER, WRITER, ADMIN) accessible on
+  // rootsastro.com without the 30–90 second cold-start delay.
+  if (process.env.NODE_ENV === 'production') {
+    const PING_URL = process.env.API_BASE_URL
+      ? `${process.env.API_BASE_URL}/api/health`
+      : `http://localhost:${PORT}/api/health`;
+
+    const FOURTEEN_MINUTES = 14 * 60 * 1000;
+
+    setInterval(async () => {
+      try {
+        const http = require('http');
+        const https = require('https');
+        const client = PING_URL.startsWith('https') ? https : http;
+        client.get(PING_URL, (res) => {
+          console.log(`[Keep-Alive] Self-ping → ${PING_URL} — status: ${res.statusCode}`);
+        }).on('error', (err) => {
+          console.warn(`[Keep-Alive] Self-ping failed: ${err.message}`);
+        });
+      } catch (err) {
+        console.warn('[Keep-Alive] Ping error:', err.message);
+      }
+    }, FOURTEEN_MINUTES);
+
+    console.log(`⏰ Keep-alive ping scheduled every 14 minutes → ${PING_URL}`);
+  }
 });
