@@ -2376,9 +2376,9 @@ const AdminDashboard = ({ user }) => {
                     
                     <div className="stat-grid" style={{ marginBottom: '2rem' }}>
                         <StatCard icon={<CreditCard size={22} />} label="Total Sales Volume" value={`${currencySymbol}${(adminFinance.totalVolume || 0).toLocaleString()}`} accent="gold" />
-                        <StatCard icon={<Percent size={22} />} label={`Gross Margin (${commissionPct}%)`} value={`${currencySymbol}${(adminFinance.platformShare || 0).toLocaleString()}`} accent="green" />
-                        <StatCard icon={<DollarSign size={22} />} label="Liquid Capital" value={`${currencySymbol}${(adminFinance.availableBalance || 0).toLocaleString()}`} accent="gold" />
-                        <StatCard icon={<Shield size={22} />} label="Awaiting Payout" value={(adminFinance.pendingWithdrawals || []).length} sub="Withdrawal requests" accent="purple" />
+                        <StatCard icon={<Percent size={22} />} label="Platform Net Profit" value={`${currencySymbol}${(adminFinance.platformProfit || 0).toLocaleString()}`} accent="green" />
+                        <StatCard icon={<DollarSign size={22} />} label="GST Collected (18%)" value={`${currencySymbol}${(adminFinance.totalGstCollected || 0).toLocaleString()}`} accent="purple" />
+                        <StatCard icon={<Shield size={22} />} label="TDS Withheld (10%)" value={`${currencySymbol}${(adminFinance.totalTdsWithheld || 0).toLocaleString()}`} accent="gold" />
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', alignItems: 'stretch' }}>

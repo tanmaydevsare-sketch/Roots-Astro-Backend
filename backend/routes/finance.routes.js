@@ -349,13 +349,32 @@ router.post("/withdraw", authMiddleware, async (req, res) => {
 // ─── ADMIN: FINANCE DASHBOARD ─────────────────────────────────────────────
 router.get("/admin/dashboard", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
     try {
-        const settings = await prisma.globalSettings.findFirst() || {};
-        const totalRevenue = await prisma.booking.aggregate({
-            where: { paymentStatus: { in: ["HELD", "RELEASED", "FORFEITED"] } }, _sum: { totalPaidAmount: true }
+        const settings = await prisma.globalSettings.findUnique({ where: { id: 1 } }) || {};
+        const stats = await prisma.booking.aggregate({
+            where: { paymentStatus: { in: ["HELD", "RELEASED", "FORFEITED"] } },
+            _sum: {
+                baseAmount: true,
+                gstAmount: true,
+                convenienceAmount: true,
+                totalPaidAmount: true
+            }
         });
-        const totalGst = await prisma.booking.aggregate({
-            where: { paymentStatus: { in: ["HELD", "RELEASED"] } }, _sum: { gstAmount: true }
-        });
+
+        const baseSum = stats._sum.baseAmount || 0;
+        const gstSum = stats._sum.gstAmount || 0;
+        const convSum = stats._sum.convenienceAmount || 0;
+        const volSum = stats._sum.totalPaidAmount || 0;
+
+        const commissionRate = settings.commissionRate ?? 0.25;
+        const tdsRate = settings.tdsRate ?? 0.10;
+
+        // Platform profit = commission on base amount + convenience fees
+        const platformProfit = (baseSum * commissionRate) + convSum;
+
+        // Astrologer Gross Share = base amount * (1 - commissionRate)
+        const astroGross = baseSum * (1 - commissionRate);
+        const tdsWithheld = astroGross * tdsRate;
+
         const heldEscrow = await prisma.booking.aggregate({
             where: { paymentStatus: "HELD" }, _sum: { totalPaidAmount: true }
         });
@@ -375,9 +394,10 @@ router.get("/admin/dashboard", authMiddleware, roleMiddleware(["ADMIN"]), async 
         });
 
         res.json({
-            totalVolume: totalRevenue._sum.totalPaidAmount || 0,
-            platformShare: (totalRevenue._sum.totalPaidAmount || 0) * settings.commissionRate,
-            totalGstCollected: totalGst._sum.gstAmount || 0,
+            totalVolume: volSum,
+            platformProfit: platformProfit,
+            totalGstCollected: gstSum,
+            totalTdsWithheld: tdsWithheld,
             heldInEscrow: heldEscrow._sum.totalPaidAmount || 0,
             pendingWithdrawals, pendingDisputes, recentTransactions,
             auditLogs: await prisma.auditLog.findMany({ take: 20, orderBy: { createdAt: "desc" } })
