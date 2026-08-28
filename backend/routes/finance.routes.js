@@ -124,6 +124,7 @@ router.post("/easebuzz/initiate", authMiddleware, async (req, res) => {
             productinfo: "Roots Astro Wallet Top-up",
             firstname: firstname || req.user.firstName || "User",
             email: email || req.user.email || "user@rootsastro.com",
+            udf1: req.user.id.toString(),
             salt: creds.salt
         });
 
@@ -138,6 +139,7 @@ router.post("/easebuzz/initiate", authMiddleware, async (req, res) => {
             phone: phone || "9999999999",
             surl: `${process.env.API_BASE_URL || "http://localhost:5000"}/api/finance/easebuzz/success`,
             furl: `${process.env.API_BASE_URL || "http://localhost:5000"}/api/finance/easebuzz/failure`,
+            udf1: req.user.id.toString(),
             hash
         });
 
@@ -158,9 +160,63 @@ router.post("/easebuzz/success", async (req, res) => {
         const settings = await prisma.globalSettings.findUnique({ where: { id: 1 } });
         const creds = getEasebuzzCreds(settings);
         const isValid = verifyResponseHash(req.body, creds.salt);
-        if (!isValid) return res.status(400).json({ error: "Invalid hash — payment verification failed." });
-        res.json({ message: "Payment verified by Easebuzz", txnid: req.body.txnid, status: req.body.status });
-    } catch (error) { res.status(500).json({ error: error.message }); }
+        if (!isValid) {
+            console.error("Easebuzz success callback hash mismatch");
+            return res.status(400).send("Hash verification failed");
+        }
+
+        const txnid = req.body.txnid;
+        const amount = parseFloat(req.body.amount);
+        const userId = parseInt(req.body.udf1);
+
+        if (req.body.status === "success") {
+            const wallet = await prisma.wallet.findUnique({ where: { userId } })
+                || await prisma.wallet.create({ data: { userId, balance: 0 } });
+
+            await prisma.$transaction(async (tx) => {
+                await tx.wallet.update({
+                    where: { id: wallet.id },
+                    data: { balance: { increment: amount } }
+                });
+
+                await tx.transaction.create({
+                    data: {
+                        walletId: wallet.id,
+                        amount: amount,
+                        type: "CREDIT",
+                        category: "TOPUP",
+                        status: "COMPLETED",
+                        description: `Wallet top-up via Easebuzz (${txnid})`,
+                        reference: txnid
+                    }
+                });
+            });
+        }
+
+        const frontendUrl = process.env.FRONTEND_URL || "https://roots-astro.web.app";
+        res.redirect(`${frontendUrl}/client/dashboard?paymentStatus=success&txnid=${txnid}&amount=${amount}`);
+    } catch (error) { 
+        console.error("Easebuzz success callback error:", error);
+        res.status(500).send(error.message); 
+    }
+});
+
+// ─── EASEBUZZ FAILURE CALLBACK ─────────────────────────────────────────────
+router.post("/easebuzz/failure", async (req, res) => {
+    try {
+        const settings = await prisma.globalSettings.findUnique({ where: { id: 1 } });
+        const creds = getEasebuzzCreds(settings);
+        const isValid = verifyResponseHash(req.body, creds.salt);
+        if (!isValid) {
+            console.error("Easebuzz failure callback hash mismatch");
+            return res.status(400).send("Hash verification failed");
+        }
+
+        const frontendUrl = process.env.FRONTEND_URL || "https://roots-astro.web.app";
+        res.redirect(`${frontendUrl}/client/dashboard?paymentStatus=failed&txnid=${req.body.txnid}`);
+    } catch (error) { 
+        res.status(500).send(error.message); 
+    }
 });
 
 // ─── PAYPAL CREATE ORDER (International only) ─────────────────────────────

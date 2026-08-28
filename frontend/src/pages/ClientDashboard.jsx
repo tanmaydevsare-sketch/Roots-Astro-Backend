@@ -170,6 +170,45 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
         script.src = 'https://checkout.razorpay.com/v1/checkout.js';
         script.async = true;
         document.body.appendChild(script);
+
+        // Check for return from payment gateway (Easebuzz / PayPal redirected flows)
+        const queryParams = new URLSearchParams(window.location.search);
+        const paymentStatus = queryParams.get('paymentStatus');
+        if (paymentStatus === 'success') {
+            const pendingStr = localStorage.getItem('pending_booking');
+            if (pendingStr) {
+                const pending = JSON.parse(pendingStr);
+                window.history.replaceState({}, document.title, window.location.pathname);
+                
+                fetch(`${API_URL}/api/bookings/create`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({
+                        astrologerId: pending.astrologerId,
+                        serviceId: pending.serviceId || 1,
+                        scheduledAt: pending.date + ' ' + pending.time,
+                        baseAmount: parseFloat(pending.amount) / 1.18,
+                        amount: pending.amount,
+                        problemDesc: pending.problemDesc || null,
+                        paymentMethod: 'WALLET'
+                    })
+                })
+                .then(res => {
+                    if (res.ok) {
+                        localStorage.removeItem('pending_booking');
+                        alert("Appointment booked successfully using Easebuzz!");
+                        fetchWalletStats();
+                        fetchBookings();
+                    } else {
+                        res.json().then(err => alert(err.error || "Booking completion failed"));
+                    }
+                })
+                .catch(err => console.error("Error creating booking from return", err));
+            }
+        } else if (paymentStatus === 'failed') {
+            window.history.replaceState({}, document.title, window.location.pathname);
+            alert("Payment failed or was cancelled. Please try again.");
+        }
     }, []);
 
     const fetchWalletStats = async () => {
@@ -456,6 +495,14 @@ const ClientDashboard = ({ user, onUserUpdate }) => {
                         }, 1000);
                     });
                 } else {
+                    localStorage.setItem('pending_booking', JSON.stringify({
+                        astrologerId: booking.astrologerId,
+                        serviceId: booking.serviceId || 1,
+                        date: booking.date,
+                        time: booking.time,
+                        amount: booking.amount,
+                        problemDesc: booking.problemDescription || null
+                    }));
                     window.location.href = initData.paymentUrl;
                     return new Promise((resolve) => { resolve({ pending: true }); });
                 }
