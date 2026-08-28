@@ -88,8 +88,12 @@ export const AstrologerCard = ({ astro, onBook, hideRate = false }) => {
 };
 
 /* ─── Booking Wizard (5 steps: Service → Date/Time → Problem → Pay → Receipt) ─── */
-export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance = 0, defaultService = null }) => {
-    const { currencySymbol, commissionRate = 0.25, convenienceRate = 0.0, gstRate = 0.0 } = useSettings();
+export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance = 0, defaultService = null, isInternational = false, activeDomesticGateway = 'razorpay' }) => {
+    const settingsContext = useSettings();
+    const commissionRate = settingsContext?.commissionRate || 0.25;
+    const convenienceRate = settingsContext?.convenienceRate || 0.0;
+    const gstRate = settingsContext?.gstRate || 0.18;
+    const currencySymbol = isInternational ? '$' : (settingsContext?.currencySymbol || '₹');
     const [step, setStep] = React.useState(1);
     const [selectedService, setSelectedService] = React.useState('');
 
@@ -241,8 +245,9 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance 
     const price = currentService?.price || 0;
     
     // Convenience fee & GST calculations
+    const finalGstRate = gstRate > 1 ? gstRate / 100 : gstRate;
     const convenienceFee = +(price * (convenienceRate / 100)).toFixed(2);
-    const gstFee = +(convenienceFee * (gstRate / 100)).toFixed(2);
+    const gstFee = +((price + convenienceFee) * finalGstRate).toFixed(2);
     const totalPrice = +(price + convenienceFee + gstFee).toFixed(2);
     
     const platformFee = +(price * commissionRate).toFixed(2);
@@ -296,7 +301,7 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance 
             return;
         }
 
-        if (paymentMethod === 'razorpay') {
+        if (paymentMethod === 'razorpay' || paymentMethod === 'easebuzz' || paymentMethod === 'paypal') {
             setPaymentProcessing(true);
             try {
                 const res = await onConfirm({
@@ -310,10 +315,10 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance 
                     paymentMethod,
                 });
                 
-                setPaymentRef(res?.paymentRef || res?.booking?.id || `RZP-${Date.now()}`);
+                setPaymentRef(res?.paymentRef || res?.booking?.id || `${paymentMethod.toUpperCase()}-${Date.now()}`);
                 setPaymentDone(true);
             } catch (err) {
-                console.error("Razorpay payment failed or was closed", err);
+                console.error(`${paymentMethod} payment failed or was closed`, err);
                 alert(err.message || "Payment failed or was cancelled.");
             } finally {
                 setPaymentProcessing(false);
@@ -485,26 +490,30 @@ export const BookingModal = ({ astro, isOpen, onClose, onConfirm, walletBalance 
                             </div>
                             {paymentMethod === 'WALLET' && <Check size={14} color="#1cc88a" />}
                         </button>
-                        <button className={`payment-method-btn ${paymentMethod === 'razorpay' ? 'selected' : ''}`} onClick={() => setPaymentMethod('razorpay')}>
-                            <div className="payment-icon rzp-icon" style={{ background: '#2373ee' }}>₹</div>
-                            <div><strong>Razorpay</strong><p>Cards, UPI, Netbanking</p></div>
-                            {paymentMethod === 'razorpay' && <Check size={14} color="#1cc88a" />}
-                        </button>
-                        <button className={`payment-method-btn ${paymentMethod === 'paypal' ? 'selected' : ''}`} onClick={() => setPaymentMethod('paypal')}>
-                            <div className="payment-icon pp-icon" style={{ background: '#003087' }}>P</div>
-                            <div><strong>PayPal</strong><p>Global wallet & Cards</p></div>
-                            {paymentMethod === 'paypal' && <Check size={14} color="#1cc88a" />}
-                        </button>
-                        <button className={`payment-method-btn ${paymentMethod === 'bank' ? 'selected' : ''}`} onClick={() => setPaymentMethod('bank')}>
-                            <div className="payment-icon" style={{ background: 'rgba(212,175,55,0.1)', color: 'var(--secondary-color)' }}>B</div>
-                            <div><strong>Bank Transfer</strong><p>Direct manual deposit</p></div>
-                            {paymentMethod === 'bank' && <Check size={14} color="#1cc88a" />}
-                        </button>
-                        <button className={`payment-method-btn ${paymentMethod === 'upi_direct' ? 'selected' : ''}`} onClick={() => setPaymentMethod('upi_direct')}>
-                            <div className="payment-icon" style={{ background: 'rgba(28,200,138,0.1)', color: '#1cc88a' }}>U</div>
-                            <div><strong>Direct UPI</strong><p>Scan to pay (GPay/PhPe)</p></div>
-                            {paymentMethod === 'upi_direct' && <Check size={14} color="#1cc88a" />}
-                        </button>
+                        
+                        {!isInternational && activeDomesticGateway === 'razorpay' && (
+                            <button className={`payment-method-btn ${paymentMethod === 'razorpay' ? 'selected' : ''}`} onClick={() => setPaymentMethod('razorpay')} style={{ gridColumn: '1 / span 2' }}>
+                                <div className="payment-icon rzp-icon" style={{ background: '#2373ee' }}>₹</div>
+                                <div><strong>Razorpay</strong><p>Cards, UPI, Netbanking</p></div>
+                                {paymentMethod === 'razorpay' && <Check size={14} color="#1cc88a" />}
+                            </button>
+                        )}
+
+                        {!isInternational && activeDomesticGateway === 'easebuzz' && (
+                            <button className={`payment-method-btn ${paymentMethod === 'easebuzz' ? 'selected' : ''}`} onClick={() => setPaymentMethod('easebuzz')} style={{ gridColumn: '1 / span 2' }}>
+                                <div className="payment-icon eb-icon" style={{ background: '#ff4c3b', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>E</div>
+                                <div><strong>Easebuzz</strong><p>Cards, UPI, Netbanking (India)</p></div>
+                                {paymentMethod === 'easebuzz' && <Check size={14} color="#1cc88a" />}
+                            </button>
+                        )}
+
+                        {isInternational && (
+                            <button className={`payment-method-btn ${paymentMethod === 'paypal' ? 'selected' : ''}`} onClick={() => setPaymentMethod('paypal')} style={{ gridColumn: '1 / span 2' }}>
+                                <div className="payment-icon pp-icon" style={{ background: '#003087' }}>P</div>
+                                <div><strong>PayPal</strong><p>Global Wallet & Cards (USD)</p></div>
+                                {paymentMethod === 'paypal' && <Check size={14} color="#1cc88a" />}
+                            </button>
+                        )}
                     </div>
 
                     {/* Manual Instructions Display */}

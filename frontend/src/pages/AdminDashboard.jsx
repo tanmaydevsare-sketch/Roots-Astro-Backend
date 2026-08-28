@@ -5,7 +5,7 @@ import {
     Users, CreditCard, Calendar, Settings, Shield, CheckCircle, XCircle, Ban, User,
     BarChart2, Eye, Video, Zap, Wifi, WifiOff, RefreshCw, Key, Globe, DollarSign,
     ArrowDownCircle, Building, Percent, Plus, Edit2, Trash2, Tag, BookOpen, Save,
-    Search, LayoutGrid, List, Table as TableIcon
+    Search, LayoutGrid, List, Table as TableIcon, FileText, Check, Lock, AlertCircle
 } from 'lucide-react';
 import API_URL from '../api/config';
 import { StatCard, StatusBadge, Modal, DashboardLayout, SidebarBtn, FormField, AstrologerCard, EmptyState } from '../components/Shared';
@@ -15,6 +15,23 @@ const AdminDashboard = ({ user }) => {
     const [searchParams, setSearchParams] = useSearchParams();
     const tab = searchParams.get('tab') || 'overview';
     const isSuper = user?.role === 'SUPERADMIN';
+
+    // ── Payment & Escrow Admin States ────────────────────────
+    const [escrowBookings, setEscrowBookings] = useState([]);
+    const [disputes, setDisputes] = useState([]);
+    const [monthlyPayouts, setMonthlyPayouts] = useState([]);
+    const [payoutMonth, setPayoutMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
+    const [processingPayouts, setProcessingPayouts] = useState(false);
+    const [markingPaidId, setMarkingPaidId] = useState(null);
+    const [payoutRefId, setPayoutRefId] = useState('');
+    const [payoutNotes, setPayoutNotes] = useState('');
+    const [payoutModalOpen, setPayoutModalOpen] = useState(false);
+    const [payoutToMark, setPayoutToMark] = useState(null);
+
+    // Easebuzz and escrow settings configuration state
+    const [ebConfig, setEbConfig] = useState({ key: '', salt: '', activeDomesticGateway: 'razorpay' });
+    const [ebStatus, setEbStatus] = useState('idle');
+
     
     // SMS Broadcast State
     const [smsTarget, setSmsTarget] = useState('ALL_ASTROLOGERS');
@@ -853,6 +870,12 @@ const AdminDashboard = ({ user }) => {
                     storageEndpoint: data.storageEndpoint || '',
                     storageAccessKey: data.storageAccessKey || '',
                     storageSecretKey: data.storageSecretKey || '',
+                    tdsRate: data.tdsRate ?? 0.10,
+                    disputeWindowDays: data.disputeWindowDays ?? 7,
+                    cancellationCutoffMinutes: data.cancellationCutoffMinutes ?? 30,
+                    activeDomesticGateway: data.activeDomesticGateway || 'razorpay',
+                    easebuzzKey: data.easebuzzKey || '',
+                    easebuzzSalt: data.easebuzzSalt || '',
                 });
                 
                 setBankDetails({
@@ -953,6 +976,45 @@ const AdminDashboard = ({ user }) => {
             } catch (err) { console.error("Admin dashboard fetch failed:", err); }
         };
 
+        const fetchEscrowBookings = async () => {
+            const token = localStorage.getItem('token');
+            try {
+                const res = await fetch(`${API_URL}/api/finance/admin/escrow`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    setEscrowBookings(data);
+                }
+            } catch (err) { console.error("Fetch escrow bookings failed", err); }
+        };
+
+        const fetchDisputes = async () => {
+            const token = localStorage.getItem('token');
+            try {
+                const res = await fetch(`${API_URL}/api/disputes`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    setDisputes(data);
+                }
+            } catch (err) { console.error("Fetch disputes failed", err); }
+        };
+
+        const fetchMonthlyPayouts = async () => {
+            const token = localStorage.getItem('token');
+            try {
+                const res = await fetch(`${API_URL}/api/finance/admin/monthly-payouts?month=${payoutMonth}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    setMonthlyPayouts(data);
+                }
+            } catch (err) { console.error("Fetch monthly payouts failed", err); }
+        };
+
         if (tab === 'finance' || tab === 'overview') fetchAdminData();
         if (['finance', 'settings', 'recordings'].includes(tab)) fetchGlobalSettings();
         if (tab === 'services') { fetchPlatformServices(); fetchCategories(); }
@@ -961,7 +1023,10 @@ const AdminDashboard = ({ user }) => {
         if (tab === 'approvals' || tab === 'overview') fetchPendingAstros();
         if (tab === 'users' || tab === 'overview') fetchUsers();
         if (tab === 'browse') fetchAstrologers();
-    }, [tab]);
+        if (tab === 'escrow') fetchEscrowBookings();
+        if (tab === 'disputes') fetchDisputes();
+        if (tab === 'payouts') fetchMonthlyPayouts();
+    }, [tab, payoutMonth]);
 
     // Test connections
     const testZoom = () => { setZoomStatus('testing'); setTimeout(() => {
@@ -1000,6 +1065,12 @@ const AdminDashboard = ({ user }) => {
                 zoomClientId: zoomCreds.clientId,
                 zoomClientSecret: zoomCreds.clientSecret,
                 activeVideoProvider,
+                tdsRate: parseFloat(settings.tdsRate) || 0.10,
+                disputeWindowDays: parseInt(settings.disputeWindowDays) || 7,
+                cancellationCutoffMinutes: parseInt(settings.cancellationCutoffMinutes) || 30,
+                activeDomesticGateway: settings.activeDomesticGateway || 'razorpay',
+                easebuzzKey: settings.easebuzzKey || '',
+                easebuzzSalt: settings.easebuzzSalt || '',
             };
 
             const res = await fetch(`${API_URL}/api/settings/admin/global`, {
@@ -1097,11 +1168,37 @@ const AdminDashboard = ({ user }) => {
                 body: JSON.stringify(payload)
             });
             if (res.ok) {
-                // Refresh bookings list
-                setTab('overview'); setTimeout(() => setTab('bookings'), 10);
+                const current = tab;
+                setTab('overview');
+                setTimeout(() => setTab(current), 10);
             }
         } catch (err) { console.error("Booking action failed", err); }
         setBookingActionLoading(null);
+    };
+
+    const handleMarkPayoutPaid = async () => {
+        if (!payoutRefId.trim()) { alert("Please provide a payment reference ID (e.g. Transaction ID / UTR)."); return; }
+        setMarkingPaidId(payoutToMark.id);
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch(`${API_URL}/api/finance/admin/monthly-payouts/${payoutToMark.id}/pay`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ referenceId: payoutRefId.trim(), adminNotes: payoutNotes.trim() })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                alert("Payout marked as paid successfully.");
+                setPayoutModalOpen(false);
+                // Refresh list
+                const current = tab;
+                setTab('overview');
+                setTimeout(() => setTab(current), 10);
+            } else {
+                alert(data.error || "Failed to update payout.");
+            }
+        } catch (e) { alert("Network error."); }
+        setMarkingPaidId(null);
     };
 
     const totalCommissionValue = Math.round((adminFinance.totalVolume || 0) * commissionPct / 100);
@@ -1124,6 +1221,9 @@ const AdminDashboard = ({ user }) => {
                 { id: 'categories', icon: <Tag size={19} />, label: 'Category Builder' },
                 { id: 'services', icon: <BookOpen size={19} />, label: 'Services Manager' },
                 { id: 'finance', icon: <CreditCard size={19} />, label: 'Platform Finance' },
+                { id: 'escrow', icon: <Lock size={19} />, label: 'Escrow Monitor' },
+                { id: 'disputes', icon: <FileText size={19} />, label: `Disputes Panel${disputes.filter(d => d.status === 'OPEN' || d.status === 'UNDER_REVIEW').length > 0 ? ` (${disputes.filter(d => d.status === 'OPEN' || d.status === 'UNDER_REVIEW').length})` : ''}` },
+                { id: 'payouts', icon: <DollarSign size={19} />, label: 'Monthly Payouts' },
                 { id: 'broadcast', icon: <Zap size={19} />, label: 'SMS Broadcaster' },
                 { id: 'content', icon: <Globe size={19} />, label: 'Page Builder (CMS)' },
                 { id: 'video', icon: <Video size={19} />, label: 'Video Integration' },
@@ -2472,6 +2572,356 @@ const AdminDashboard = ({ user }) => {
                 </div>
             )}
 
+            {/* ═══ ESCROW MONITOR ═══ */}
+            {tab === 'escrow' && (
+                <div className="fade-in">
+                    <h2 className="dash-title">Escrow Monitor</h2>
+                    <p className="dash-sub">Monitor funds currently held in escrow. Force complete or release refunds for disputes or inactive sessions.</p>
+                    <div className="glass-card">
+                        <table className="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Booking ID</th>
+                                    <th>Client</th>
+                                    <th>Astrologer</th>
+                                    <th>Scheduled Date</th>
+                                    <th>Escrow Balance</th>
+                                    <th>Client Confirmed</th>
+                                    <th>Astro Confirmed</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {escrowBookings.length === 0 ? (
+                                    <tr>
+                                        <td colSpan="8" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+                                            No funds currently held in escrow.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    escrowBookings.map(b => (
+                                        <tr key={b.id}>
+                                            <td><strong>#{b.id}</strong></td>
+                                            <td>{b.client?.firstName} {b.client?.lastName}</td>
+                                            <td>{b.astrologer?.firstName} {b.astrologer?.lastName}</td>
+                                            <td style={{ color: 'var(--text-muted)' }}>{new Date(b.scheduledAt).toLocaleString()}</td>
+                                            <td><strong style={{ color: 'var(--secondary-color)' }}>{currencySymbol}{b.totalPaidAmount || b.amount}</strong></td>
+                                            <td>
+                                                <span className={`status-badge ${b.clientConfirmed ? 'completed' : 'upcoming'}`}>
+                                                    {b.clientConfirmed ? '✓ Confirmed' : 'Pending'}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <span className={`status-badge ${b.astrologerConfirmed ? 'completed' : 'upcoming'}`}>
+                                                    {b.astrologerConfirmed ? '✓ Confirmed' : 'Pending'}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                    <button 
+                                                        className="btn btn-outline btn-sm"
+                                                        style={{ borderColor: '#ff6b6b', color: '#ff6b6b', padding: '0.4rem 0.6rem', fontSize: '0.8rem' }}
+                                                        onClick={() => {
+                                                            if (window.confirm(`Refund full amount of ${currencySymbol}${b.totalPaidAmount || b.amount} back to client's wallet?`)) {
+                                                                handleBookingAction(b.id, 'refund');
+                                                            }
+                                                        }}
+                                                    >
+                                                        Force Refund
+                                                    </button>
+                                                    <button 
+                                                        className="btn btn-primary btn-sm"
+                                                        style={{ padding: '0.4rem 0.6rem', fontSize: '0.8rem' }}
+                                                        onClick={() => {
+                                                            if (window.confirm("Force release escrow funds to astrologer's wallet?")) {
+                                                                handleBookingAction(b.id, 'complete');
+                                                            }
+                                                        }}
+                                                    >
+                                                        Force Complete
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {/* ═══ DISPUTES PANEL ═══ */}
+            {tab === 'disputes' && (
+                <div className="fade-in">
+                    <h2 className="dash-title">Disputes Panel</h2>
+                    <p className="dash-sub">Review refund claims raised by clients. Examine descriptions, check evidence files, and approve/reject claims.</p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                        {disputes.length === 0 ? (
+                            <EmptyState icon={<FileText size={40} />} title="No Disputes Found" description="There are currently no dispute claims raised in the system." />
+                        ) : (
+                            disputes.map(claim => {
+                                const evidenceList = JSON.parse(claim.evidenceUrls || '[]');
+                                return (
+                                    <div key={claim.id} className="glass-card" style={{ padding: '1.5rem', borderLeft: claim.status === 'OPEN' ? '4px solid #ff4a4a' : claim.status === 'UNDER_REVIEW' ? '4px solid #D4AF37' : '1px solid var(--glass-border)' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
+                                            <div>
+                                                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block' }}>CLAIM ID: #{claim.id}</span>
+                                                <h3 style={{ margin: '0.2rem 0', color: 'var(--text-main)' }}>{claim.reason.replace('_', ' ')}</h3>
+                                                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                                                    Raised by <strong>{claim.booking?.client?.firstName} {claim.booking?.client?.lastName}</strong> against <strong>{claim.booking?.astrologer?.firstName} {claim.booking?.astrologer?.lastName}</strong>
+                                                </span>
+                                            </div>
+                                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                                <span className={`status-badge ${claim.status.toLowerCase()}`}>{claim.status}</span>
+                                                <strong style={{ fontSize: '1.25rem', color: 'var(--secondary-color)', marginLeft: '0.5rem' }}>{currencySymbol}{claim.booking?.totalPaidAmount || claim.booking?.amount}</strong>
+                                            </div>
+                                        </div>
+
+                                        <div style={{ background: 'rgba(255,255,255,0.02)', padding: '1rem', borderRadius: '8px', marginBottom: '1rem', border: '1px solid var(--glass-border)' }}>
+                                            <p style={{ margin: 0, fontSize: '0.9rem', whiteSpace: 'pre-line' }}>{claim.description}</p>
+                                        </div>
+
+                                        {evidenceList.length > 0 && (
+                                            <div style={{ marginBottom: '1.25rem' }}>
+                                                <strong style={{ fontSize: '0.85rem', display: 'block', marginBottom: '0.5rem' }}>📎 Attached Evidence Links:</strong>
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                                    {evidenceList.map((url, idx) => (
+                                                        <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="btn btn-outline btn-xs" style={{ fontSize: '0.75rem', textTransform: 'none' }}>
+                                                            Evidence #{idx + 1}
+                                                        </a>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {claim.status === 'OPEN' && (
+                                            <div style={{ display: 'flex', gap: '0.75rem' }}>
+                                                <button 
+                                                    className="btn btn-outline btn-sm"
+                                                    onClick={async () => {
+                                                        const token = localStorage.getItem('token');
+                                                        const res = await fetch(`${API_URL}/api/disputes/${claim.id}/review`, {
+                                                            method: 'PATCH',
+                                                            headers: { 'Authorization': `Bearer ${token}` }
+                                                        });
+                                                        if (res.ok) { setTab('overview'); setTimeout(() => setTab('disputes'), 10); }
+                                                    }}
+                                                >
+                                                    Mark Under Review
+                                                </button>
+                                            </div>
+                                        )}
+
+                                        {(claim.status === 'OPEN' || claim.status === 'UNDER_REVIEW') && (
+                                            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.75rem' }}>
+                                                <button 
+                                                    className="btn btn-sm"
+                                                    style={{ background: '#8B3A3A', color: '#fff', border: 'none' }}
+                                                    onClick={async () => {
+                                                        const notes = prompt("Enter resolution notes for client refund:");
+                                                        if (notes === null) return;
+                                                        const token = localStorage.getItem('token');
+                                                        const res = await fetch(`${API_URL}/api/disputes/${claim.id}/resolve`, {
+                                                            method: 'PATCH',
+                                                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                                                            body: JSON.stringify({ decision: 'REFUND', adminNotes: notes })
+                                                        });
+                                                        if (res.ok) { setTab('overview'); setTimeout(() => setTab('disputes'), 10); }
+                                                    }}
+                                                >
+                                                    ⚖️ Resolve: Approve Full Refund
+                                                </button>
+                                                <button 
+                                                    className="btn btn-outline btn-sm"
+                                                    style={{ borderColor: 'var(--text-muted)', color: 'var(--text-muted)' }}
+                                                    onClick={async () => {
+                                                        const notes = prompt("Enter resolution notes for rejection:");
+                                                        if (notes === null) return;
+                                                        const token = localStorage.getItem('token');
+                                                        const res = await fetch(`${API_URL}/api/disputes/${claim.id}/resolve`, {
+                                                            method: 'PATCH',
+                                                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                                                            body: JSON.stringify({ decision: 'REJECT', adminNotes: notes })
+                                                        });
+                                                        if (res.ok) { setTab('overview'); setTimeout(() => setTab('disputes'), 10); }
+                                                    }}
+                                                >
+                                                    ✗ Resolve: Reject Dispute
+                                                </button>
+                                            </div>
+                                        )}
+
+                                        {claim.resolvedAt && (
+                                            <div style={{ fontSize: '0.82rem', padding: '0.75rem', background: 'rgba(255,255,255,0.03)', borderRadius: '6px', border: '1px solid var(--glass-border)', marginTop: '0.5rem' }}>
+                                                <strong>Resolution Notes ({new Date(claim.resolvedAt).toLocaleDateString()}):</strong>
+                                                <p style={{ margin: '0.25rem 0 0 0', color: 'var(--text-muted)' }}>{claim.adminNotes || 'No notes provided.'}</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* ═══ MONTHLY PAYOUTS MANAGER ═══ */}
+            {tab === 'payouts' && (
+                <div className="fade-in">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
+                        <div>
+                            <h2 className="dash-title" style={{ margin: 0 }}>Monthly Payouts Manager</h2>
+                            <p className="dash-sub">Process monthly astrologer gross releases, compute TDS withholding (10%), and settle balances.</p>
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                            <input 
+                                type="month" 
+                                className="form-input-sm" 
+                                style={{ width: '150px' }}
+                                value={payoutMonth}
+                                onChange={e => setPayoutMonth(e.target.value)}
+                            />
+                            <button 
+                                className="btn btn-primary"
+                                onClick={async () => {
+                                    const confirm = window.confirm(`Calculate and process monthly payouts for all astrologers for ${payoutMonth}?`);
+                                    if (!confirm) return;
+                                    setProcessingPayouts(true);
+                                    const token = localStorage.getItem('token');
+                                    try {
+                                        const res = await fetch(`${API_URL}/api/finance/admin/monthly-payouts/process`, {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                                            body: JSON.stringify({ month: payoutMonth })
+                                        });
+                                        const data = await res.json();
+                                        if (res.ok) {
+                                            alert(data.message || "Payouts processed successfully.");
+                                            // Refresh list
+                                            const current = tab;
+                                            setTab('overview');
+                                            setTimeout(() => setTab(current), 10);
+                                        } else {
+                                            alert(data.error || "Failed to process payouts.");
+                                        }
+                                    } catch (e) { alert("Network error."); }
+                                    setProcessingPayouts(false);
+                                }}
+                                disabled={processingPayouts}
+                            >
+                                {processingPayouts ? 'Processing...' : '🔄 Process Payouts'}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="glass-card">
+                        <table className="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Astrologer</th>
+                                    <th>Gross Earnings</th>
+                                    <th>TDS Withheld</th>
+                                    <th>Net Payout</th>
+                                    <th>Status</th>
+                                    <th>Resolved / Reference</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {monthlyPayouts.length === 0 ? (
+                                    <tr>
+                                        <td colSpan="7" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+                                            No processed payouts found for month {payoutMonth}. Click Process Payouts to generate.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    monthlyPayouts.map(pay => (
+                                        <tr key={pay.id}>
+                                            <td>
+                                                <strong>{pay.astrologer?.firstName} {pay.astrologer?.lastName}</strong>
+                                                <br/>
+                                                <small style={{ color: 'var(--text-muted)' }}>{pay.astrologer?.email}</small>
+                                            </td>
+                                            <td>{currencySymbol}{pay.grossAmount.toFixed(2)}</td>
+                                            <td style={{ color: '#ff6b6b' }}>-{currencySymbol}{pay.tdsAmount.toFixed(2)} ({(pay.tdsRate*100).toFixed(0)}%)</td>
+                                            <td><strong style={{ color: '#1cc88a' }}>{currencySymbol}{pay.netAmount.toFixed(2)}</strong></td>
+                                            <td>
+                                                <span className={`status-badge ${pay.status.toLowerCase()}`}>
+                                                    {pay.status}
+                                                </span>
+                                            </td>
+                                            <td style={{ fontSize: '0.85rem', fontFamily: 'monospace' }}>
+                                                {pay.referenceId || pay.adminNotes || '-'}
+                                            </td>
+                                            <td>
+                                                {pay.status === 'PENDING' ? (
+                                                    <button 
+                                                        className="btn btn-outline btn-sm"
+                                                        style={{ borderColor: '#1cc88a', color: '#1cc88a', padding: '0.4rem 0.6rem', fontSize: '0.8rem' }}
+                                                        onClick={() => {
+                                                            setPayoutToMark(pay);
+                                                            setPayoutRefId('');
+                                                            setPayoutNotes('');
+                                                            setPayoutModalOpen(true);
+                                                        }}
+                                                    >
+                                                        Mark Paid
+                                                    </button>
+                                                ) : (
+                                                    <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>✓ Settled</span>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {payoutModalOpen && payoutToMark && (
+                <Modal isOpen={payoutModalOpen} onClose={() => setPayoutModalOpen(false)} title={`Settle Monthly Payout - ${payoutToMark.astrologer?.firstName} ${payoutToMark.astrologer?.lastName}`}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                        <div>
+                            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Month:</span>
+                            <strong style={{ marginLeft: '0.5rem' }}>{payoutToMark.month}</strong>
+                        </div>
+                        <div>
+                            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Net Amount due:</span>
+                            <strong style={{ marginLeft: '0.5rem', color: '#1cc88a', fontSize: '1.25rem' }}>{currencySymbol}{payoutToMark.netAmount.toFixed(2)}</strong>
+                            <small style={{ display: 'block', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                                (Gross: {currencySymbol}{payoutToMark.grossAmount.toFixed(2)} less TDS Withholding: {currencySymbol}{payoutToMark.tdsAmount.toFixed(2)})
+                            </small>
+                        </div>
+                        <FormField label="Payment Reference ID / UTR (Required)">
+                            <input 
+                                className="form-input" 
+                                placeholder="e.g. UTR123456789 or TXN-987" 
+                                value={payoutRefId} 
+                                onChange={e => setPayoutRefId(e.target.value)} 
+                            />
+                        </FormField>
+                        <FormField label="Internal Notes (Optional)">
+                            <textarea 
+                                className="form-input form-textarea" 
+                                rows={3} 
+                                placeholder="Bank transfer notes..." 
+                                value={payoutNotes} 
+                                onChange={e => setPayoutNotes(e.target.value)} 
+                            />
+                        </FormField>
+                        <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
+                            <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => setPayoutModalOpen(false)}>Cancel</button>
+                            <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleMarkPayoutPaid} disabled={markingPaidId !== null}>
+                                {markingPaidId !== null ? 'Settling...' : 'Confirm Paid'}
+                            </button>
+                        </div>
+                    </div>
+                </Modal>
+            )}
+
             {/* ═══ VIDEO INTEGRATION ═══ */}
             {tab === 'video' && (
                 <div className="fade-in">
@@ -2744,25 +3194,79 @@ const AdminDashboard = ({ user }) => {
                                     <input className="form-input" type="number" step="0.01" value={settings.gstRate ?? 0.0} onChange={e => setSettings({ ...settings, gstRate: parseFloat(e.target.value) || 0.0 })} />
                                 </FormField>
                             </div>
-                            <FormField label="Support Email"><input className="form-input" type="email" value={settings.supportEmail} onChange={e => setSettings({ ...settings, supportEmail: e.target.value })} placeholder="support@rootsastro.com" /></FormField>
-                            <FormField label="Contact Phone"><input className="form-input" value={settings.contactPhone} onChange={e => setSettings({ ...settings, contactPhone: e.target.value })} placeholder="+1 (555) 000-0000" /></FormField>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                <FormField label="Support Email"><input className="form-input" type="email" value={settings.supportEmail} onChange={e => setSettings({ ...settings, supportEmail: e.target.value })} placeholder="support@rootsastro.com" /></FormField>
+                                <FormField label="Contact Phone"><input className="form-input" value={settings.contactPhone} onChange={e => setSettings({ ...settings, contactPhone: e.target.value })} placeholder="+1 (555) 000-0000" /></FormField>
+                            </div>
+
+                            <h3 style={{ marginBottom: '0.5rem', marginTop: '1rem' }}>Taxation, Escrow & Cancellation Rules</h3>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+                                <FormField label="TDS Withheld (%)">
+                                    <input className="form-input" type="number" step="0.01" value={(settings.tdsRate ?? 0.10) * 100} onChange={e => setSettings({ ...settings, tdsRate: (parseFloat(e.target.value) || 0.0) / 100 })} />
+                                </FormField>
+                                <FormField label="Dispute Window (Days)">
+                                    <input className="form-input" type="number" value={settings.disputeWindowDays ?? 7} onChange={e => setSettings({ ...settings, disputeWindowDays: parseInt(e.target.value) || 0 })} />
+                                </FormField>
+                                <FormField label="Cancellation Cutoff (Mins)">
+                                    <input className="form-input" type="number" value={settings.cancellationCutoffMinutes ?? 30} onChange={e => setSettings({ ...settings, cancellationCutoffMinutes: parseInt(e.target.value) || 0 })} />
+                                </FormField>
+                            </div>
                         </div>
                         
-                        <div className="glass-card">
-                            <h3 style={{ marginBottom: '1.25rem' }}>Operational Control Center</h3>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                {[
-                                    { key: 'maintenanceMode', label: 'Maintenance Mode', desc: 'Disables all front-end interaction.', color: '#ff4a4a' },
-                                    { key: 'allowNewRegistrations', label: 'New Registrations', desc: 'Allow new users to sign up.', color: 'var(--secondary-color)' },
-                                    { key: 'apiLockdown', label: 'API Lockdown', desc: 'Restrict external third-party API access.', color: '#f6c23e' },
-                                ].map(op => (
-                                    <div key={op.key} className="booking-item" style={{ background: settings[op.key] ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.1)', borderColor: 'var(--glass-border)' }}>
-                                        <div style={{ flex: 1 }}><strong style={{ display: 'block', fontSize: '0.9rem' }}>{op.label}</strong><span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{op.desc}</span></div>
-                                        <button onClick={() => setSettings(p => ({ ...p, [op.key]: !p[op.key] }))} style={{ padding: '0.4rem 1rem', borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: '0.75rem', background: op.key === 'maintenanceMode' ? (settings[op.key] ? op.color : 'rgba(255,255,255,0.05)') : (settings[op.key] ? 'rgba(28,200,138,0.2)' : 'rgba(255,74,74,0.12)'), color: op.key === 'maintenanceMode' ? (settings[op.key] ? '#fff' : 'var(--text-muted)') : (settings[op.key] ? '#1cc88a' : '#ff4a4a') }}>
-                                            {settings[op.key] ? (op.key === 'maintenanceMode' ? 'ACTIVE' : 'ENABLED') : (op.key === 'maintenanceMode' ? 'OFF' : 'DISABLED')}
-                                        </button>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                            <div className="glass-card">
+                                <h3 style={{ marginBottom: '1.25rem' }}>Operational Control Center</h3>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                    {[
+                                        { key: 'maintenanceMode', label: 'Maintenance Mode', desc: 'Disables all front-end interaction.', color: '#ff4a4a' },
+                                        { key: 'allowNewRegistrations', label: 'New Registrations', desc: 'Allow new users to sign up.', color: 'var(--secondary-color)' },
+                                        { key: 'apiLockdown', label: 'API Lockdown', desc: 'Restrict external third-party API access.', color: '#f6c23e' },
+                                    ].map(op => (
+                                        <div key={op.key} className="booking-item" style={{ background: settings[op.key] ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.1)', borderColor: 'var(--glass-border)' }}>
+                                            <div style={{ flex: 1 }}><strong style={{ display: 'block', fontSize: '0.9rem' }}>{op.label}</strong><span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{op.desc}</span></div>
+                                            <button onClick={() => setSettings(p => ({ ...p, [op.key]: !p[op.key] }))} style={{ padding: '0.4rem 1rem', borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: '0.75rem', background: op.key === 'maintenanceMode' ? (settings[op.key] ? op.color : 'rgba(255,255,255,0.05)') : (settings[op.key] ? 'rgba(28,200,138,0.2)' : 'rgba(255,74,74,0.12)'), color: op.key === 'maintenanceMode' ? (settings[op.key] ? '#fff' : 'var(--text-muted)') : (settings[op.key] ? '#1cc88a' : '#ff4a4a') }}>
+                                                {settings[op.key] ? (op.key === 'maintenanceMode' ? 'ACTIVE' : 'ENABLED') : (op.key === 'maintenanceMode' ? 'OFF' : 'DISABLED')}
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="glass-card">
+                                <h3 style={{ marginBottom: '1.25rem' }}>Domestic Payment Gateway Setup</h3>
+                                <FormField label="Active Domestic Gateway">
+                                    <select 
+                                        className="form-input" 
+                                        value={settings.activeDomesticGateway || 'razorpay'} 
+                                        onChange={e => setSettings({ ...settings, activeDomesticGateway: e.target.value })}
+                                    >
+                                        <option value="razorpay">Razorpay (Default)</option>
+                                        <option value="easebuzz">Easebuzz Payment Gateway</option>
+                                    </select>
+                                </FormField>
+                                
+                                {settings.activeDomesticGateway === 'easebuzz' && (
+                                    <div className="fade-in" style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                                        <FormField label="Easebuzz Merchant Key">
+                                            <input 
+                                                className="form-input" 
+                                                type="password" 
+                                                placeholder="Easebuzz Key ID" 
+                                                value={settings.easebuzzKey || ''} 
+                                                onChange={e => setSettings({ ...settings, easebuzzKey: e.target.value })} 
+                                            />
+                                        </FormField>
+                                        <FormField label="Easebuzz Merchant Salt">
+                                            <input 
+                                                className="form-input" 
+                                                type="password" 
+                                                placeholder="Easebuzz Salt Value" 
+                                                value={settings.easebuzzSalt || ''} 
+                                                onChange={e => setSettings({ ...settings, easebuzzSalt: e.target.value })} 
+                                            />
+                                        </FormField>
                                     </div>
-                                ))}
+                                )}
                             </div>
                         </div>
                     </div>

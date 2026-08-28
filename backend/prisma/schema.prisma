@@ -31,6 +31,7 @@ model User {
   auditLogs          AuditLog[]
   bookings           Booking[]          @relation("ClientBookings")
   astrologerBookings Booking[]          @relation("AstrologerBookings")
+  monthlyPayouts     MonthlyPayout[]
 }
 
 model AstrologerProfile {
@@ -93,26 +94,50 @@ model Service {
 }
 
 model Booking {
-  id              Int               @id @default(autoincrement())
-  clientId        Int
-  client          User              @relation("ClientBookings", fields: [clientId], references: [id])
-  astrologerId    Int
-  astrologer      User              @relation("AstrologerBookings", fields: [astrologerId], references: [id])
-  profileId       Int?
-  profile         AstrologerProfile? @relation(fields: [profileId], references: [id])
-  serviceId       Int?
-  service         Service?          @relation(fields: [serviceId], references: [id])
-  scheduledAt     DateTime
-  startTime       DateTime?         // Actual start time
-  endTime         DateTime?         // Actual end time
-  status          String            @default("BOOKED") // UPCOMING, IN_PROGRESS, COMPLETED, CANCELLED
-  type            String            @default("CHAT")   // CHAT, VIDEO
-  amount          Float
-  problemDesc     String?
-  zoomMeetingUrl  String?
-  recordingUrl    String?
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  id                  Int               @id @default(autoincrement())
+  clientId            Int
+  client              User              @relation("ClientBookings", fields: [clientId], references: [id])
+  astrologerId        Int
+  astrologer          User              @relation("AstrologerBookings", fields: [astrologerId], references: [id])
+  profileId           Int?
+  profile             AstrologerProfile? @relation(fields: [profileId], references: [id])
+  serviceId           Int?
+  service             Service?          @relation(fields: [serviceId], references: [id])
+  scheduledAt         DateTime
+  startTime           DateTime?
+  endTime             DateTime?
+  status              String            @default("UPCOMING") // UPCOMING, IN_PROGRESS, COMPLETED, CANCELLED, CANCELLED_FORFEITED, CANCELLED_BY_ADMIN, REFUNDED_BY_ADMIN, RESCHEDULED, RESCHEDULED_BY_ADMIN
+  type                String            @default("CHAT")
+
+  // ── Payment Escrow ──────────────────────────────────────────
+  paymentStatus       String            @default("PENDING") // PENDING, HELD, RELEASED, REFUNDED, FORFEITED
+  paymentGateway      String?           // RAZORPAY, EASEBUZZ, PAYPAL, WALLET
+  gatewayOrderId      String?
+  gatewayPaymentId    String?
+
+  // ── Tax Breakdown (stored at time of payment) ────────────────
+  baseAmount          Float             @default(0)
+  convenienceAmount   Float             @default(0)
+  gstAmount           Float             @default(0)
+  totalPaidAmount     Float             @default(0)
+  amount              Float             // kept for compatibility — equals totalPaidAmount
+
+  // ── International ────────────────────────────────────────────
+  currency            String            @default("INR") // INR or USD
+  isInternational     Boolean           @default(false)
+
+  // ── Dual Confirmation ────────────────────────────────────────
+  clientConfirmed     Boolean           @default(false)
+  astrologerConfirmed Boolean           @default(false)
+  clientConfirmedAt   DateTime?
+  astrologerConfirmedAt DateTime?
+
+  problemDesc         String?
+  zoomMeetingUrl      String?
+  recordingUrl        String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  disputes            DisputeClaim[]
 }
 
 model Wallet {
@@ -251,7 +276,17 @@ model GlobalSettings {
 
   // Convenience and GST Rates
   convenienceRate     Float  @default(0.0)
-  gstRate             Float  @default(0.0)
+  gstRate             Float  @default(0.18)
+
+  // ── Settlement & Taxation ──────────────────────────────────
+  tdsRate                    Float   @default(0.10)  // TDS % deducted from astrologer payouts
+  disputeWindowDays          Int     @default(7)     // Days client can raise dispute after completion
+  cancellationCutoffMinutes  Int     @default(30)    // Minutes before appt after which no refund
+
+  // ── Gateway Selection ─────────────────────────────────────
+  activeDomesticGateway String @default("razorpay") // razorpay | easebuzz
+  easebuzzKey           String?
+  easebuzzSalt          String?
 
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -298,4 +333,43 @@ model Availability {
   endTime      String
   breakStart   String?
   breakEnd     String?
+}
+
+// ── Dispute & Refund Claims ─────────────────────────────────────────────────
+model DisputeClaim {
+  id          Int      @id @default(autoincrement())
+  bookingId   Int
+  booking     Booking  @relation(fields: [bookingId], references: [id])
+  clientId    Int
+  // Reason dropdown options
+  reason      String   // DISSATISFIED | ABUSIVE | MISCONDUCT | NO_SHOW | WRONG_ADVICE | OTHER
+  description String
+  evidenceUrls String  @default("[]") // JSON array of uploaded file URLs
+  status      String   @default("OPEN") // OPEN | UNDER_REVIEW | RESOLVED_REFUND | RESOLVED_REJECTED
+  adminNotes  String?
+  resolvedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ── Monthly Astrologer Payouts ───────────────────────────────────────────────
+model MonthlyPayout {
+  id            Int      @id @default(autoincrement())
+  astrologerId  Int
+  astrologer    User     @relation(fields: [astrologerId], references: [id])
+  month         String   // Format: "2026-08"
+  grossAmount   Float    @default(0) // Total earned before deductions
+  tdsRate       Float    @default(0.10)
+  tdsAmount     Float    @default(0) // TDS withheld
+  commissionAmount Float @default(0) // Platform commission already deducted at booking
+  netAmount     Float    @default(0) // Final payout to astrologer
+  currency      String   @default("INR")
+  status        String   @default("PENDING") // PENDING | PROCESSED | PAID
+  referenceId   String?
+  adminNotes    String?
+  processedAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([astrologerId, month])
 }

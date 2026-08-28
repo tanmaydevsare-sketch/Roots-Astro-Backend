@@ -100,7 +100,10 @@ router.patch('/admin/global', authMiddleware, roleMiddleware(['SUPERADMIN', 'ADM
             'feature1Title', 'feature1Desc', 'feature2Title', 'feature2Desc', 'feature3Title', 'feature3Desc',
             'aboutUsContent', 'contactContent', 'privacyPolicy', 'termsOfService',
             'refundPolicy', 'shippingPolicy', 'blogContent', 'legalContent', 'sitePrimaryColor',
-            'siteSecondaryColor', 'siteAccentColor', 'siteLogo', 'convenienceRate', 'gstRate'
+            'siteSecondaryColor', 'siteAccentColor', 'siteLogo', 'convenienceRate', 'gstRate',
+            // ── Payment System Settings ──────────────────────────────────────────
+            'tdsRate', 'disputeWindowDays', 'cancellationCutoffMinutes',
+            'activeDomesticGateway', 'easebuzzKey', 'easebuzzSalt'
         ];
 
         // Add super-only fields if user is SUPERADMIN

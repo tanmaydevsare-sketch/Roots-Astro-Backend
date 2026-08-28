@@ -188,6 +188,14 @@ const AstrologerDashboard = ({ user, onUserUpdate }) => {
     const [passwordLoading, setPasswordLoading] = useState(false);
     const [bookingFilter, setBookingFilter] = useState('all');
     const [previewDay, setPreviewDay] = useState('Monday');
+    
+    // ── Payment & Earnings States ────────────────────────────
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
+    const [confirmingSessionId, setConfirmingSessionId] = useState(null);
+    const [earningsData, setEarningsData] = useState({
+        payoutHistory: [],
+        currentMonth: { grossAmount: 0, tdsRate: 0.10, tdsAmount: 0, netAmount: 0, bookingCount: 0, status: 'PENDING' }
+    });
 
     // API Integration useEffect
     useEffect(() => {
@@ -209,6 +217,15 @@ const AstrologerDashboard = ({ user, onUserUpdate }) => {
                         upiId: fData.upiId || '',
                         transactions: fData.transactions || []
                     });
+                }
+
+                // Fetch Monthly Earnings and Payouts
+                const earnRes = await fetch(`${API_URL}/api/finance/astrologer/earnings`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (earnRes.ok) {
+                    const earnData = await earnRes.json();
+                    setEarningsData(earnData);
                 }
 
                 // Fetch Gateway Settings
@@ -243,7 +260,10 @@ const AstrologerDashboard = ({ user, onUserUpdate }) => {
                         time: new Date(b.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                         status: b.status.toLowerCase(),
                         amount: b.amount,
-                        astrologerReceives: (b.amount * (1 - commissionRate)).toFixed(2)
+                        astrologerReceives: (b.baseAmount * (1 - commissionRate)).toFixed(2),
+                        astrologerConfirmed: b.astrologerConfirmed,
+                        clientConfirmed: b.clientConfirmed,
+                        paymentStatus: b.paymentStatus
                     })));
                 }
             } catch (err) {
@@ -318,7 +338,7 @@ const AstrologerDashboard = ({ user, onUserUpdate }) => {
         fetchDashboardData();
         fetchMasterServices();
         fetchProfile();
-    }, []);
+    }, [refreshTrigger]);
 
     const handleImageUpload = (e) => {
         const file = e.target.files[0];
@@ -512,6 +532,28 @@ const AstrologerDashboard = ({ user, onUserUpdate }) => {
             console.error("Start session failed", err);
             setZoomGenerating(false);
         }
+    };
+
+    const confirmSessionCompleted = async (bookingId) => {
+        const confirm = window.confirm("Are you sure you want to mark this session as completed? This will request final client confirmation to release the escrow payout.");
+        if (!confirm) return;
+
+        setConfirmingSessionId(bookingId);
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch(`${API_URL}/api/bookings/confirm/${bookingId}`, {
+                method: 'PATCH',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (res.ok) {
+                alert(data.message);
+                setRefreshTrigger(prev => prev + 1);
+            } else {
+                alert(data.error || 'Confirmation failed.');
+            }
+        } catch (err) { alert('Network error. Please try again.'); }
+        setConfirmingSessionId(null);
     };
 
     const upcoming = bookings.filter(b => b.status === 'upcoming');
@@ -1171,6 +1213,33 @@ const AstrologerDashboard = ({ user, onUserUpdate }) => {
                                         </div>
                                     </>
                                 )}
+                                {(b.status === 'in_progress' || b.status === 'completed') && (
+                                    <>
+                                        {!b.astrologerConfirmed && (
+                                            <button 
+                                                className="btn btn-primary" 
+                                                style={{ width: '100%', justifyContent: 'center', gap: '0.5rem', padding: '0.65rem', background: '#1cc88a' }} 
+                                                onClick={() => confirmSessionCompleted(b.id)}
+                                                disabled={confirmingSessionId === b.id}
+                                            >
+                                                <CheckCircle size={14} /> {confirmingSessionId === b.id ? 'Confirming...' : 'Confirm Session Done'}
+                                            </button>
+                                        )}
+                                        {b.astrologerConfirmed && (
+                                            <div style={{ textAlign: 'center', padding: '0.5rem', background: 'rgba(28,200,138,0.1)', borderRadius: '8px', color: '#1cc88a', fontSize: '0.82rem' }}>
+                                                ✓ You confirmed completion. {!b.clientConfirmed ? 'Awaiting client...' : 'Escrow released.'}
+                                            </div>
+                                        )}
+                                        <button 
+                                            type="button"
+                                            className="btn btn-outline" 
+                                            style={{ width: '100%', justifyContent: 'center', gap: '0.5rem', padding: '0.65rem', display: 'flex', alignItems: 'center' }}
+                                            onClick={() => setActiveChat({ bookingId: b.id, recipientName: b.clientRef })}
+                                        >
+                                            <MessageCircle size={14} /> Chat with Client
+                                        </button>
+                                    </>
+                                )}
                                 {b.status === 'cancelled' && cancelledIds.has(b.id) && <span style={{ fontSize: '0.82rem', color: '#ff6b6b' }}>✗ Cancelled — full refund issued to client.</span>}
                                 {b.status === 'rescheduled' && <span style={{ fontSize: '0.82rem', color: '#D4AF37' }}>⟳ Awaiting client's response.</span>}
                             </div>
@@ -1192,6 +1261,33 @@ const AstrologerDashboard = ({ user, onUserUpdate }) => {
                                         </button>
                                         <button className="btn btn-outline btn-sm" onClick={() => openReschedule(b)}>Reschedule</button>
                                         <button className="btn btn-sm" style={{ background: 'rgba(255,74,74,0.1)', color: '#ff6b6b', border: '1px solid rgba(255,74,74,0.2)' }} onClick={() => setCancelConfirm(b.id)}>Cancel</button>
+                                    </>
+                                )}
+                                {(b.status === 'in_progress' || b.status === 'completed') && (
+                                    <>
+                                        {!b.astrologerConfirmed && (
+                                            <button 
+                                                className="btn btn-primary btn-sm" 
+                                                style={{ gap: '0.4rem', background: '#1cc88a' }} 
+                                                onClick={() => confirmSessionCompleted(b.id)}
+                                                disabled={confirmingSessionId === b.id}
+                                            >
+                                                <CheckCircle size={13} /> {confirmingSessionId === b.id ? 'Confirming...' : 'Confirm Session Done'}
+                                            </button>
+                                        )}
+                                        {b.astrologerConfirmed && (
+                                            <span style={{ fontSize: '0.82rem', color: '#1cc88a', padding: '0.3rem 0.6rem', background: 'rgba(28,200,138,0.1)', borderRadius: '6px', fontWeight: '500' }}>
+                                                ✓ Confirmed. {!b.clientConfirmed ? 'Awaiting client...' : 'Escrow released.'}
+                                            </span>
+                                        )}
+                                        <button 
+                                            type="button"
+                                            className="btn btn-outline btn-sm" 
+                                            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                                            onClick={() => setActiveChat({ bookingId: b.id, recipientName: b.clientRef })}
+                                        >
+                                            <MessageCircle size={13} /> Chat with Client
+                                        </button>
                                     </>
                                 )}
                                 {b.hasProblemNote && (
@@ -1617,67 +1713,142 @@ const AstrologerDashboard = ({ user, onUserUpdate }) => {
                     `}</style>
                 </>
             )}
-            {/* ══════ MY EARNINGS ══════ */}
             {tab === 'earnings' && (
                 <div className="fade-in">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                         <div>
-                            <h2 className="dash-title" style={{ margin: 0 }}>My Earnings</h2>
-                            <p className="dash-sub">Track your income and request withdrawals.</p>
+                            <h2 className="dash-title" style={{ margin: 0 }}>My Earnings & Payouts</h2>
+                            <p className="dash-sub">Track your monthly earnings, TDS deductions, and monthly payouts.</p>
                         </div>
-                        <button className="btn btn-primary" onClick={() => {
-                            // Transaction simulation
-                            alert("Opening detailed transaction history...");
-                        }}><ExternalLink size={16} /> View Transactions</button>
+                        <button className="btn btn-primary" onClick={() => setWithdrawModal(true)}>
+                            <ArrowDownCircle size={16} style={{ marginRight: '6px' }} /> Request Advance Withdrawal
+                        </button>
                     </div>
 
-                    <div className="earnings-balance-grid" style={{ marginBottom: '2rem' }}>
-                        <div className="balance-card withdrawable">
+                    {/* Current Month Settlement Panel */}
+                    <div className="glass-card" style={{ marginBottom: '2rem', padding: '1.5rem', background: 'linear-gradient(135deg, rgba(212,175,55,0.06) 0%, rgba(139,95,191,0.04) 100%)', border: '1px solid rgba(212,175,55,0.2)' }}>
+                        <h3 style={{ color: 'var(--secondary-color)', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '0 0 1rem 0' }}>
+                            📊 Current Month Forecast ({earningsData.currentMonth.month})
+                        </h3>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1.5rem' }}>
+                            <div>
+                                <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block' }}>Consultations completed</span>
+                                <strong style={{ fontSize: '1.75rem', color: 'var(--text-main)' }}>{earningsData.currentMonth.bookingCount} sessions</strong>
+                            </div>
+                            <div>
+                                <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block' }}>Gross Share (after platform fee)</span>
+                                <strong style={{ fontSize: '1.75rem', color: 'var(--text-main)' }}>{currencySymbol}{earningsData.currentMonth.grossAmount.toFixed(2)}</strong>
+                            </div>
+                            <div>
+                                <span style={{ fontSize: '0.82rem', color: '#ff6b6b', display: 'block' }}>TDS Withheld ({(earningsData.currentMonth.tdsRate * 100).toFixed(0)}%)</span>
+                                <strong style={{ fontSize: '1.75rem', color: '#ff6b6b' }}>-{currencySymbol}{earningsData.currentMonth.tdsAmount.toFixed(2)}</strong>
+                            </div>
+                            <div>
+                                <span style={{ fontSize: '0.82rem', color: '#1cc88a', display: 'block' }}>Estimated Net Payout</span>
+                                <strong style={{ fontSize: '2rem', color: '#1cc88a' }}>{currencySymbol}{earningsData.currentMonth.netAmount.toFixed(2)}</strong>
+                            </div>
+                        </div>
+                        <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '1rem 0 0 0', fontStyle: 'italic' }}>
+                            ⚠️ Note: Estimated payout is processed on the 1st of the next month and credited to your registered bank account/UPI ID after TDS deductions.
+                        </p>
+                    </div>
+
+                    {/* Escrow & Lifetime Balances */}
+                    <div className="earnings-balance-grid" style={{ marginBottom: '2rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
+                        <div className="balance-card withdrawable" style={{ padding: '1.25rem' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
                                 <CheckCircle size={16} color="#1cc88a" />
-                                <span style={{ fontSize: '0.82rem', color: '#1cc88a', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Withdrawable</span>
+                                <span style={{ fontSize: '0.82rem', color: '#1cc88a', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Withdrawable Balance</span>
                             </div>
                             <div className="balance-amount">{currencySymbol}{finance.withdrawableBalance.toFixed(2)}</div>
-                            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Cleared funds for completed sessions</p>
-                            <button className="btn btn-primary btn-sm" style={{ marginTop: '1rem' }} onClick={() => setWithdrawModal(true)}><ArrowDownCircle size={14} /> Withdraw Funds</button>
+                            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Cleared funds from completed sessions</p>
                         </div>
-                        <div className="balance-card pending">
+                        <div className="balance-card pending" style={{ padding: '1.25rem' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
                                 <Lock size={16} color="#D4AF37" />
-                                <span style={{ fontSize: '0.82rem', color: '#D4AF37', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Pending / Locked</span>
+                                <span style={{ fontSize: '0.82rem', color: '#D4AF37', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Locked in Escrow</span>
                             </div>
                             <div className="balance-amount" style={{ color: 'var(--text-muted)' }}>{currencySymbol}{finance.pendingBalance.toFixed(2)}</div>
-                            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Locked until session completion</p>
+                            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Awaiting dual completion confirmation</p>
                         </div>
-                        <div className="balance-card total">
+                        <div className="balance-card total" style={{ padding: '1.25rem' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
                                 <DollarSign size={16} color="#9b59b6" />
-                                <span style={{ fontSize: '0.82rem', color: '#9b59b6', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>All-Time Earnings</span>
+                                <span style={{ fontSize: '0.82rem', color: '#9b59b6', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>All-Time Settled</span>
                             </div>
-                            <div className="balance-amount" style={{ color: '#9b59b6' }}>{currencySymbol}{(finance.withdrawnTotal + finance.withdrawableBalance + finance.pendingBalance).toFixed(2)}</div>
-                            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Total lifetime earnings</p>
+                            <div className="balance-amount" style={{ color: '#9b59b6' }}>{currencySymbol}{(finance.withdrawnTotal + finance.withdrawableBalance).toFixed(2)}</div>
+                            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Total lifetime payouts processed</p>
                         </div>
                     </div>
 
-                    <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
-                        <div style={{ textAlign: 'center' }}><p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>Active Funds</p><h2 style={{ margin: '0.3rem 0' }}>{currencySymbol}{(finance.withdrawableBalance + finance.pendingBalance).toFixed(2)}</h2><span style={{ color: '#1cc88a', fontSize: '0.75rem' }}>Dynamic Balance</span></div>
-                        <div style={{ textAlign: 'center' }}><p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>Sessions</p><h2 style={{ margin: '0.3rem 0' }}>{bookings.length}</h2><span style={{ color: '#1cc88a', fontSize: '0.75rem' }}>{bookings.filter(b => b.status === 'completed').length} completed</span></div>
-                        <div style={{ textAlign: 'center' }}><p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>Avg Ticket</p><h2 style={{ margin: '0.3rem 0' }}>{currencySymbol}{bookings.length > 0 ? (bookings.reduce((sum, b) => sum + Number(b.amount || 0), 0) / bookings.length).toFixed(2) : '0.00'}</h2><span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>per session</span></div>
+                    {/* Monthly Payout History */}
+                    <div className="glass-card" style={{ marginBottom: '2rem' }}>
+                        <h3 style={{ marginBottom: '1.25rem' }}>Monthly Payout History</h3>
+                        <table className="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Month</th>
+                                    <th>Gross Amount</th>
+                                    <th>TDS Withheld</th>
+                                    <th>Net Payout</th>
+                                    <th>Status</th>
+                                    <th>Reference ID / Note</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {earningsData.payoutHistory.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>
+                                            No payout history available yet. Payouts are processed monthly.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    earningsData.payoutHistory.map(pay => (
+                                        <tr key={pay.id}>
+                                            <td><strong>{pay.month}</strong></td>
+                                            <td>{currencySymbol}{pay.grossAmount.toFixed(2)}</td>
+                                            <td style={{ color: '#ff6b6b' }}>-{currencySymbol}{pay.tdsAmount.toFixed(2)} ({(pay.tdsRate*100).toFixed(0)}%)</td>
+                                            <td style={{ color: '#1cc88a', fontWeight: 600 }}>{currencySymbol}{pay.netAmount.toFixed(2)}</td>
+                                            <td>
+                                                <span className={`status-badge ${pay.status.toLowerCase()}`}>
+                                                    {pay.status}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <span style={{ fontSize: '0.85rem', fontFamily: 'monospace' }}>
+                                                    {pay.referenceId || pay.adminNotes || 'Processing...'}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
                     </div>
 
                     {/* Session Breakdown in Table */}
                     <div className="glass-card">
-                        <h3 style={{ marginBottom: '1.25rem' }}>Detailed Session Revenue</h3>
+                        <h3 style={{ marginBottom: '1.25rem' }}>Recent Session Breakdown</h3>
                         <table className="data-table">
-                            <thead><tr><th>Client Ref</th><th>Session Type</th><th>Gross</th><th>Net ({astrologerPct}%)</th><th>Status</th></tr></thead>
+                            <thead><tr><th>Client Ref</th><th>Session Type</th><th>Gross Amount</th><th>Your Share</th><th>Escrow Status</th></tr></thead>
                             <tbody>
                                 {bookings.slice(0, 10).map(b => (
                                     <tr key={b.id}>
                                         <td><strong>{b.clientRef}</strong></td>
                                         <td>{b.service}</td>
                                         <td>{currencySymbol}{b.amount}</td>
-                                        <td style={{ color: '#1cc88a', fontWeight: 600 }}>{currencySymbol}{(b.amount * (1 - commissionRate)).toFixed(2)}</td>
-                                        <td><StatusBadge status={b.status} /></td>
+                                        <td style={{ color: '#1cc88a', fontWeight: 600 }}>{currencySymbol}{b.astrologerReceives}</td>
+                                        <td>
+                                            <span style={{ 
+                                                fontSize: '0.8rem', 
+                                                padding: '0.25rem 0.5rem', 
+                                                borderRadius: '4px',
+                                                background: b.paymentStatus === 'RELEASED' ? 'rgba(28,200,138,0.1)' : 'rgba(212,175,55,0.1)',
+                                                color: b.paymentStatus === 'RELEASED' ? '#1cc88a' : '#D4AF37'
+                                            }}>
+                                                {b.paymentStatus || 'HELD'}
+                                            </span>
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
