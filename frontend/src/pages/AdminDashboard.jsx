@@ -2445,6 +2445,14 @@ const AdminDashboard = ({ user }) => {
                                 <div className="fade-in">
                                     {pgConfig.activeGateway === 'razorpay' ? (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Razorpay (India Gateway)</span>
+                                                {settings.activeDomesticGateway === 'razorpay' ? (
+                                                    <span style={{ fontSize: '0.7rem', color: '#1cc88a', fontWeight: 'bold' }}>🟢 Active (Domestic)</span>
+                                                ) : (
+                                                    <button className="btn btn-outline btn-xs" style={{ fontSize: '0.65rem', padding: '0.2rem 0.5rem' }} onClick={() => setSettings({ ...settings, activeDomesticGateway: 'razorpay' })}>Activate Gateway</button>
+                                                )}
+                                            </div>
                                             <input type="password" placeholder="Razorpay Key ID" className="form-input-sm" value={pgConfig.razorpay.keyId} onChange={e => setPgConfig(p => ({ ...p, razorpay: { ...p.razorpay, keyId: e.target.value } }))} />
                                             <input type="password" placeholder="Razorpay Key Secret" className="form-input-sm" value={pgConfig.razorpay.keySecret} onChange={e => setPgConfig(p => ({ ...p, razorpay: { ...p.razorpay, keySecret: e.target.value } }))} />
                                             {/* Payment Method Toggles */}
@@ -2462,15 +2470,39 @@ const AdminDashboard = ({ user }) => {
                                         </div>
                                     ) : pgConfig.activeGateway === 'easebuzz' ? (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Easebuzz (India Gateway)</span>
+                                                {settings.activeDomesticGateway === 'easebuzz' ? (
+                                                    <span style={{ fontSize: '0.7rem', color: '#1cc88a', fontWeight: 'bold' }}>🟢 Active (Domestic)</span>
+                                                ) : (
+                                                    <button className="btn btn-outline btn-xs" style={{ fontSize: '0.65rem', padding: '0.2rem 0.5rem' }} onClick={() => setSettings({ ...settings, activeDomesticGateway: 'easebuzz' })}>Activate Gateway</button>
+                                                )}
+                                            </div>
                                             <input type="password" placeholder="Easebuzz Merchant Key" className="form-input-sm" value={settings.easebuzzKey || ''} onChange={e => setSettings({ ...settings, easebuzzKey: e.target.value })} />
                                             <input type="password" placeholder="Easebuzz Merchant Salt" className="form-input-sm" value={settings.easebuzzSalt || ''} onChange={e => setSettings({ ...settings, easebuzzSalt: e.target.value })} />
                                         </div>
                                     ) : (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>PayPal (International Gateway)</span>
+                                                <span style={{ fontSize: '0.7rem', color: '#1cc88a', fontWeight: 'bold' }}>🟢 Active (Overseas)</span>
+                                            </div>
                                             <input type="password" placeholder="PayPal Client ID" className="form-input-sm" value={pgConfig.paypal.clientId} onChange={e => setPgConfig(p => ({ ...p, paypal: { ...p.paypal, clientId: e.target.value } }))} />
                                             <input type="password" placeholder="PayPal Client Secret" className="form-input-sm" value={pgConfig.paypal.clientSecret} onChange={e => setPgConfig(p => ({ ...p, paypal: { ...p.paypal, clientSecret: e.target.value } }))} />
                                         </div>
                                     )}
+                                </div>
+                            </div>
+
+                            {/* Superadmin Escrow Bank Account Details */}
+                            <div style={{ marginBottom: '1.25rem', padding: '1rem', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+                                <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.8rem', color: 'var(--secondary-color)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                    <Building size={14} /> Escrow Settlement Account
+                                </h4>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                                    <input type="text" placeholder="Superadmin Bank Name" className="form-input-sm" value={bankDetails.bankName || ''} onChange={e => setBankDetails({ ...bankDetails, bankName: e.target.value })} />
+                                    <input type="text" placeholder="Superadmin Account Number" className="form-input-sm" value={bankDetails.accountNumber || ''} onChange={e => setBankDetails({ ...bankDetails, accountNumber: e.target.value })} />
+                                    <input type="text" placeholder="Superadmin IFSC Code / Swift" className="form-input-sm" value={bankDetails.ifsc || ''} onChange={e => setBankDetails({ ...bankDetails, ifsc: e.target.value })} />
                                 </div>
                             </div>
 
