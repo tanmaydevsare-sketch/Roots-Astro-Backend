@@ -296,7 +296,7 @@ router.post('/login', async (req, res) => {
 
     if (envAdminEmail && email === envAdminEmail) {
       if (password === envAdminPassword) {
-        // Auto-provision or update ADMIN in PostgreSQL to maintain integrity
+        // Auto-provision or update SUPERADMIN in PostgreSQL to maintain integrity
         let user = await prisma.user.findUnique({ where: { email } });
         if (!user) {
           const hashedPassword = await bcrypt.hash(password, 10);
@@ -304,7 +304,7 @@ router.post('/login', async (req, res) => {
             data: {
               email,
               password: hashedPassword,
-              role: 'ADMIN',
+              role: 'SUPERADMIN',
               firstName: 'System',
               lastName: 'Administrator',
               status: 'active',
@@ -326,7 +326,7 @@ router.post('/login', async (req, res) => {
         }
 
         const token = jwt.sign(
-          { id: user.id, email: user.email, role: 'ADMIN' },
+          { id: user.id, email: user.email, role: user.role || 'SUPERADMIN' },
           process.env.JWT_SECRET || "supersecretjwtkey_astro_4b9a1c",
           { expiresIn: '24h' }
         );
@@ -336,7 +336,7 @@ router.post('/login', async (req, res) => {
           user: {
             id: user.id,
             email: user.email,
-            role: 'ADMIN',
+            role: user.role || 'SUPERADMIN',
             status: user.status,
             firstName: user.firstName,
             lastName: user.lastName
