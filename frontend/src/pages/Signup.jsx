@@ -63,17 +63,11 @@ const Signup = ({ onLogin }) => {
         if (phone.length < 10) return setError('Enter a valid mobile number.');
         setLoading(true);
         try {
-            if (window.recaptchaVerifier) {
-                try {
-                    window.recaptchaVerifier.clear();
-                } catch {
-                    // Suppressed Clear Verifier Error
-                }
-                window.recaptchaVerifier = null;
+            if (!window.recaptchaVerifier) {
+                window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+                    size: 'invisible'
+                });
             }
-            window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-                size: 'invisible'
-            });
             const formattedPhone = `${countryCode}${phone}`;
             const confirmationResult = await signInWithPhoneNumber(auth, formattedPhone, window.recaptchaVerifier);
             window.confirmationResult = confirmationResult;
