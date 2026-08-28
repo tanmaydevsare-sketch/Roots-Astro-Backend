@@ -889,7 +889,7 @@ const AdminDashboard = ({ user }) => {
                 if (data.activeGateway) {
                     setPgConfig(p => ({ 
                         ...p, 
-                        activeGateway: data.activeGateway,
+                        activeGateway: data.activeDomesticGateway === 'easebuzz' ? 'easebuzz' : data.activeGateway,
                         razorpay: { 
                             keyId: data.razorpayKeyId || '', 
                             keySecret: data.razorpayKeySecret || '', 
@@ -1068,7 +1068,7 @@ const AdminDashboard = ({ user }) => {
                 tdsRate: parseFloat(settings.tdsRate) || 0.10,
                 disputeWindowDays: parseInt(settings.disputeWindowDays) || 7,
                 cancellationCutoffMinutes: parseInt(settings.cancellationCutoffMinutes) || 30,
-                activeDomesticGateway: settings.activeDomesticGateway || 'razorpay',
+                activeDomesticGateway: pgConfig.activeGateway === 'easebuzz' ? 'easebuzz' : (pgConfig.activeGateway === 'razorpay' ? 'razorpay' : (settings.activeDomesticGateway || 'razorpay')),
                 easebuzzKey: settings.easebuzzKey || '',
                 easebuzzSalt: settings.easebuzzSalt || '',
             };
@@ -2432,7 +2432,7 @@ const AdminDashboard = ({ user }) => {
                             {/* Gateway Configuration */}
                             <div style={{ marginBottom: '1.25rem', padding: '1rem', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
                                 <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
-                                    {['razorpay', 'paypal'].map(gw => (
+                                    {['razorpay', 'easebuzz', 'paypal'].map(gw => (
                                         <button 
                                             key={gw}
                                             onClick={() => setPgConfig(p => ({ ...p, activeGateway: gw }))}
@@ -2450,15 +2450,20 @@ const AdminDashboard = ({ user }) => {
                                             {/* Payment Method Toggles */}
                                             <div style={{ display: 'flex', gap: '0.6rem', marginTop: '0.5rem' }}>
                                                 {['allowUpi', 'allowCard', 'allowNetBanking'].map(k => (
-                                                    <button 
-                                                        key={k} 
-                                                        onClick={() => setSettings(p => ({ ...p, [k]: !p[k] }))}
-                                                        style={{ flex: 1, padding: '0.4rem', borderRadius: '8px', fontSize: '0.65rem', border: '1px solid var(--glass-border)', background: settings[k] ? 'rgba(28,200,138,0.1)' : 'rgba(255,74,74,0.05)', color: settings[k] ? '#1cc88a' : '#ff4a4a', fontWeight: 700, cursor: 'pointer' }}
-                                                    >
-                                                        {k.replace('allow', '').toUpperCase()} {settings[k] ? 'ON' : 'OFF'}
-                                                    </button>
+                                                     <button 
+                                                         key={k} 
+                                                         onClick={() => setSettings(p => ({ ...p, [k]: !p[k] }))}
+                                                         style={{ flex: 1, padding: '0.4rem', borderRadius: '8px', fontSize: '0.65rem', border: '1px solid var(--glass-border)', background: settings[k] ? 'rgba(28,200,138,0.1)' : 'rgba(255,74,74,0.05)', color: settings[k] ? '#1cc88a' : '#ff4a4a', fontWeight: 700, cursor: 'pointer' }}
+                                                     >
+                                                         {k.replace('allow', '').toUpperCase()} {settings[k] ? 'ON' : 'OFF'}
+                                                     </button>
                                                 ))}
                                             </div>
+                                        </div>
+                                    ) : pgConfig.activeGateway === 'easebuzz' ? (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                                            <input type="password" placeholder="Easebuzz Merchant Key" className="form-input-sm" value={settings.easebuzzKey || ''} onChange={e => setSettings({ ...settings, easebuzzKey: e.target.value })} />
+                                            <input type="password" placeholder="Easebuzz Merchant Salt" className="form-input-sm" value={settings.easebuzzSalt || ''} onChange={e => setSettings({ ...settings, easebuzzSalt: e.target.value })} />
                                         </div>
                                     ) : (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
