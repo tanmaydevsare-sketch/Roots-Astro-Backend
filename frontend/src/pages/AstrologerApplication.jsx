@@ -111,7 +111,7 @@ const AstrologerApplication = ({ onLogin }) => {
         setShowFirebaseDomainNotice(false);
         try {
             if (window.recaptchaVerifier) {
-                try { window.recaptchaVerifier.clear(); } catch { }
+                try { window.recaptchaVerifier.clear(); } catch { /* ignore clear error */ }
                 window.recaptchaVerifier = null;
             }
             window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', { size: 'invisible' });
