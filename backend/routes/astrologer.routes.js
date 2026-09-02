@@ -469,4 +469,198 @@ router.get('/:id', async (req, res) => {
     }
 });
 
+// ─── KYC: Astrologer submits documents + bank details ─────────────────────
+router.patch('/kyc/documents', authMiddleware, roleMiddleware(['ASTROLOGER']), async (req, res) => {
+    const {
+        panCardUrl, aadhaarUrl, signedAgreementUrl,
+        bankAccountNo, bankName, bankBranchId, ifscCode
+    } = req.body;
+
+    try {
+        if (!panCardUrl || !aadhaarUrl || !signedAgreementUrl) {
+            return res.status(400).json({ error: 'PAN card, Aadhaar, and signed agreement are required.' });
+        }
+        if (!bankAccountNo || !bankName || !ifscCode) {
+            return res.status(400).json({ error: 'Bank account number, bank name, and IFSC code are required.' });
+        }
+
+        const updated = await prisma.astrologerProfile.update({
+            where: { userId: req.user.id },
+            data: {
+                panCardUrl,
+                aadhaarUrl,
+                signedAgreementUrl,
+                bankAccountNo,
+                bankName,
+                bankBranchId: bankBranchId || null,
+                ifscCode,
+                kycStatus: 'DOCS_SUBMITTED'
+            }
+        });
+
+        await prisma.auditLog.create({
+            data: {
+                action: 'KYC_DOCS_SUBMITTED',
+                details: `Astrologer ${req.user.id} submitted KYC documents`,
+                userId: req.user.id,
+                ipAddress: req.ip
+            }
+        });
+
+        res.json({ message: 'KYC documents submitted successfully. Your profile is under review.', kycStatus: updated.kycStatus });
+    } catch (error) {
+        console.error('[KYC_SUBMIT]', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ─── KYC: Get current KYC status ──────────────────────────────────────────
+router.get('/kyc/status', authMiddleware, roleMiddleware(['ASTROLOGER']), async (req, res) => {
+    try {
+        const profile = await prisma.astrologerProfile.findUnique({
+            where: { userId: req.user.id },
+            select: {
+                kycStatus: true,
+                kycRejectionReason: true,
+                kycReviewedAt: true,
+                bankDetailsConfirmedByAdmin: true,
+                panCardUrl: true,
+                aadhaarUrl: true,
+                signedAgreementUrl: true,
+                bankAccountNo: true,
+                bankName: true,
+                bankBranchId: true,
+                ifscCode: true
+            }
+        });
+        if (!profile) return res.status(404).json({ error: 'Profile not found' });
+        res.json(profile);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ─── KYC ADMIN: List all pending KYC submissions ──────────────────────────
+router.get('/admin/kyc/pending', authMiddleware, roleMiddleware(['ADMIN']), async (req, res) => {
+    try {
+        const profiles = await prisma.astrologerProfile.findMany({
+            where: { kycStatus: { in: ['DOCS_SUBMITTED', 'KYC_REJECTED'] } },
+            include: {
+                user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } }
+            },
+            orderBy: { kycReviewedAt: 'asc' }
+        });
+        res.json(profiles);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ─── KYC ADMIN: Get all astrologers with KYC info (for full table) ────────
+router.get('/admin/kyc/all', authMiddleware, roleMiddleware(['ADMIN']), async (req, res) => {
+    try {
+        const profiles = await prisma.astrologerProfile.findMany({
+            include: {
+                user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } }
+            },
+            orderBy: { id: 'desc' }
+        });
+        res.json(profiles);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ─── KYC ADMIN: Approve KYC ───────────────────────────────────────────────
+router.patch('/admin/kyc/:id/approve', authMiddleware, roleMiddleware(['ADMIN']), async (req, res) => {
+    const { confirmBankDetails } = req.body;
+    try {
+        const updated = await prisma.astrologerProfile.update({
+            where: { id: parseInt(req.params.id) },
+            data: {
+                kycStatus: 'KYC_APPROVED',
+                kycRejectionReason: null,
+                kycReviewedAt: new Date(),
+                bankDetailsConfirmedByAdmin: confirmBankDetails === true ? true : undefined
+            },
+            include: { user: true }
+        });
+
+        // Also set main profile to APPROVED if docs look good
+        await prisma.astrologerProfile.update({
+            where: { id: parseInt(req.params.id) },
+            data: { status: 'APPROVED' }
+        });
+        await prisma.user.update({
+            where: { id: updated.userId },
+            data: { status: 'active' }
+        });
+
+        await prisma.auditLog.create({
+            data: {
+                action: 'KYC_APPROVED',
+                details: `Admin approved KYC for astrologer profile #${req.params.id}`,
+                userId: req.user.id
+            }
+        });
+
+        res.json({ message: 'KYC approved. Astrologer account is now fully active.', kycStatus: 'KYC_APPROVED' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ─── KYC ADMIN: Reject KYC ────────────────────────────────────────────────
+router.patch('/admin/kyc/:id/reject', authMiddleware, roleMiddleware(['ADMIN']), async (req, res) => {
+    const { reason } = req.body;
+    try {
+        if (!reason || reason.trim().length < 10) {
+            return res.status(400).json({ error: 'Rejection reason must be at least 10 characters.' });
+        }
+        await prisma.astrologerProfile.update({
+            where: { id: parseInt(req.params.id) },
+            data: {
+                kycStatus: 'KYC_REJECTED',
+                kycRejectionReason: reason.trim(),
+                kycReviewedAt: new Date()
+            }
+        });
+
+        await prisma.auditLog.create({
+            data: {
+                action: 'KYC_REJECTED',
+                details: `Admin rejected KYC for profile #${req.params.id}: ${reason}`,
+                userId: req.user.id
+            }
+        });
+
+        res.json({ message: 'KYC rejected. Astrologer has been notified.', kycStatus: 'KYC_REJECTED' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ─── KYC ADMIN: Confirm bank beneficiary details added in bank portal ─────
+router.patch('/admin/kyc/:id/confirm-bank', authMiddleware, roleMiddleware(['ADMIN']), async (req, res) => {
+    try {
+        await prisma.astrologerProfile.update({
+            where: { id: parseInt(req.params.id) },
+            data: { bankDetailsConfirmedByAdmin: true }
+        });
+
+        await prisma.auditLog.create({
+            data: {
+                action: 'BANK_BENEFICIARY_CONFIRMED',
+                details: `Admin confirmed bank beneficiary for profile #${req.params.id}`,
+                userId: req.user.id
+            }
+        });
+
+        res.json({ message: 'Bank beneficiary details confirmed.' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 module.exports = router;
+

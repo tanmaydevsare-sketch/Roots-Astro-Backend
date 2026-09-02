@@ -5,7 +5,8 @@ import {
     Users, CreditCard, Calendar, Settings, Shield, CheckCircle, XCircle, Ban, User,
     BarChart2, Eye, Video, Zap, Wifi, WifiOff, RefreshCw, Key, Globe, DollarSign,
     ArrowDownCircle, Building, Percent, Plus, Edit2, Trash2, Tag, BookOpen, Save,
-    Search, LayoutGrid, List, Table as TableIcon, FileText, Check, Lock, AlertCircle
+    Search, LayoutGrid, List, Table as TableIcon, FileText, Check, Lock, AlertCircle,
+    Upload, Download, FileCheck, ExternalLink
 } from 'lucide-react';
 import API_URL from '../api/config';
 import { StatCard, StatusBadge, Modal, DashboardLayout, SidebarBtn, FormField, AstrologerCard, EmptyState } from '../components/Shared';
@@ -630,6 +631,7 @@ const AdminDashboard = ({ user }) => {
         activeGateway: 'razorpay',
         razorpay: { keyId: '', keySecret: '', mode: 'test' },
         paypal: { clientId: '', clientSecret: '', mode: 'sandbox' },
+        ccavenue: { merchantId: '', accessCode: '', workingKey: '', mode: 'test' }
     });
     const [rzpStatus, setRzpStatus] = useState('idle');
     const [ppStatus, setPpStatus] = useState('idle');
@@ -657,10 +659,28 @@ const AdminDashboard = ({ user }) => {
     const [allBookings, setAllBookings] = useState([]); // Default to clean array, fetch real later
     const [bookingActionLoading, setBookingActionLoading] = useState(null);
     const [allAstros, setAllAstros] = useState([]);
-    
+
+    // ── CCAvenue State ──
+    const [ccavenueConfig, setCcavenueConfig] = useState({ merchantId: '', accessCode: '', workingKey: '', mode: 'test' });
+    const [ccavenueSaved, setCcavenueSaved] = useState(false);
+
+    // ── Master Agreement Upload State ──
+    const [masterAgreementUrl, setMasterAgreementUrl] = useState('');
+    const [agreementUploading, setAgreementUploading] = useState(false);
+    const [agreementSaved, setAgreementSaved] = useState(false);
+    const agreementFileRef = useRef(null);
+
+    // ── KYC Review State ──
+    const [kycProfiles, setKycProfiles] = useState([]);
+    const [kycLoading, setKycLoading] = useState(false);
+    const [kycRejectModal, setKycRejectModal] = useState(null); // profile id or null
+    const [kycRejectReason, setKycRejectReason] = useState('');
+    const [kycActionLoading, setKycActionLoading] = useState(null);
+
     // Logo Upload State
     const logoFileRef = useRef(null);
     const [logoUploading, setLogoUploading] = useState(false);
+
 
     const handleLogoUpload = async (e) => {
         const file = e.target.files[0];
@@ -889,7 +909,7 @@ const AdminDashboard = ({ user }) => {
                 if (data.activeGateway) {
                     setPgConfig(p => ({ 
                         ...p, 
-                        activeGateway: data.activeDomesticGateway === 'easebuzz' ? 'easebuzz' : data.activeGateway,
+                        activeGateway: data.activeDomesticGateway === 'easebuzz' ? 'easebuzz' : data.activeDomesticGateway === 'ccavenue' ? 'ccavenue' : data.activeGateway,
                         razorpay: { 
                             keyId: data.razorpayKeyId || '', 
                             keySecret: data.razorpayKeySecret || '', 
@@ -899,11 +919,29 @@ const AdminDashboard = ({ user }) => {
                             clientId: data.paypalClientId || '', 
                             clientSecret: data.paypalClientSecret || '', 
                             mode: data.paypalMode || 'sandbox' 
+                        },
+                        ccavenue: {
+                            merchantId: data.ccavenueMerchantId || '',
+                            accessCode: data.ccavenueAccessCode || '',
+                            workingKey: data.ccavenueWorkingKey || '',
+                            mode: data.ccavenueMode || 'test'
                         }
                     }));
                     if (data.razorpayKeyId) setRzpStatus('connected');
                     if (data.paypalClientId) setPpStatus('connected');
                 }
+
+                // Load CCAvenue separately
+                setCcavenueConfig({
+                    merchantId: data.ccavenueMerchantId || '',
+                    accessCode: data.ccavenueAccessCode || '',
+                    workingKey: data.ccavenueWorkingKey || '',
+                    mode: data.ccavenueMode || 'test'
+                });
+
+                // Load master agreement URL
+                if (data.masterAgreementUrl) setMasterAgreementUrl(data.masterAgreementUrl);
+
                 
                 if (data.activeVideoProvider) setActiveVideoProvider(data.activeVideoProvider);
                 setZoomCreds({
@@ -1021,6 +1059,7 @@ const AdminDashboard = ({ user }) => {
         if (tab === 'categories') fetchCategories();
         if (tab === 'bookings') fetchAllBookings();
         if (tab === 'approvals' || tab === 'overview') fetchPendingAstros();
+        if (tab === 'kyc' || tab === 'approvals' || tab === 'overview') fetchKycProfiles();
         if (tab === 'users' || tab === 'overview') fetchUsers();
         if (tab === 'browse') fetchAstrologers();
         if (tab === 'escrow') fetchEscrowBookings();
@@ -1068,9 +1107,16 @@ const AdminDashboard = ({ user }) => {
                 tdsRate: parseFloat(settings.tdsRate) || 0.10,
                 disputeWindowDays: parseInt(settings.disputeWindowDays) || 7,
                 cancellationCutoffMinutes: parseInt(settings.cancellationCutoffMinutes) || 30,
-                activeDomesticGateway: pgConfig.activeGateway === 'easebuzz' ? 'easebuzz' : (pgConfig.activeGateway === 'razorpay' ? 'razorpay' : (settings.activeDomesticGateway || 'razorpay')),
+                activeDomesticGateway: pgConfig.activeGateway === 'easebuzz' ? 'easebuzz' : pgConfig.activeGateway === 'ccavenue' ? 'ccavenue' : (settings.activeDomesticGateway || 'razorpay'),
                 easebuzzKey: settings.easebuzzKey || '',
                 easebuzzSalt: settings.easebuzzSalt || '',
+                // ── CCAvenue ──────────────────────────────────────────────
+                ccavenueMerchantId: ccavenueConfig.merchantId || '',
+                ccavenueAccessCode: ccavenueConfig.accessCode || '',
+                ccavenueWorkingKey: ccavenueConfig.workingKey || '',
+                ccavenueMode: ccavenueConfig.mode || 'test',
+                // ── Master Agreement ──────────────────────────────────────
+                masterAgreementUrl: masterAgreementUrl || '',
             };
 
             const res = await fetch(`${API_URL}/api/settings/admin/global`, {
@@ -1158,6 +1204,154 @@ const AdminDashboard = ({ user }) => {
         } catch (err) { console.error("Payout action failed", err); }
     };
 
+    // ── KYC Review Actions ──────────────────────────────────────────────────
+    const fetchKycProfiles = async () => {
+        setKycLoading(true);
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch(`${API_URL}/api/astrologers/admin/kyc/all`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setKycProfiles(data);
+            }
+        } catch (err) { console.error("KYC fetch failed", err); }
+        setKycLoading(false);
+    };
+
+    const handleKycApprove = async (profileId) => {
+        setKycActionLoading(profileId);
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch(`${API_URL}/api/astrologers/admin/kyc/${profileId}/approve`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ confirmBankDetails: false })
+            });
+            if (res.ok) {
+                setKycProfiles(prev => prev.map(p => p.id === profileId ? { ...p, kycStatus: 'KYC_APPROVED', status: 'APPROVED' } : p));
+                alert('KYC approved successfully. Astrologer account is now active.');
+            } else {
+                const err = await res.json();
+                alert(err.error || 'Failed to approve KYC.');
+            }
+        } catch { alert('Network error.'); }
+        setKycActionLoading(null);
+    };
+
+    const handleKycReject = async (profileId) => {
+        if (!kycRejectReason || kycRejectReason.trim().length < 10) {
+            alert('Please enter a rejection reason (min 10 chars).');
+            return;
+        }
+        setKycActionLoading(profileId);
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch(`${API_URL}/api/astrologers/admin/kyc/${profileId}/reject`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ reason: kycRejectReason })
+            });
+            if (res.ok) {
+                setKycProfiles(prev => prev.map(p => p.id === profileId ? { ...p, kycStatus: 'KYC_REJECTED', kycRejectionReason: kycRejectReason } : p));
+                setKycRejectModal(null);
+                setKycRejectReason('');
+            } else {
+                const err = await res.json();
+                alert(err.error || 'Failed to reject KYC.');
+            }
+        } catch { alert('Network error.'); }
+        setKycActionLoading(null);
+    };
+
+    const handleConfirmBeneficiary = async (profileId) => {
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch(`${API_URL}/api/astrologers/admin/kyc/${profileId}/confirm-bank`, {
+                method: 'PATCH',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                setKycProfiles(prev => prev.map(p => p.id === profileId ? { ...p, bankDetailsConfirmedByAdmin: true } : p));
+                alert('Beneficiary confirmed in bank portal.');
+            }
+        } catch { alert('Network error.'); }
+    };
+
+    // ── Agreement Upload ─────────────────────────────────────────────────────
+    const handleAgreementUpload = async (file) => {
+        if (!file || file.type !== 'application/pdf') {
+            alert('Please select a PDF file.');
+            return;
+        }
+        if (file.size > 10 * 1024 * 1024) {
+            alert('File size must be under 10MB.');
+            return;
+        }
+        setAgreementUploading(true);
+        try {
+            const { ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
+            const { storage } = await import('../firebase');
+            const storageRef = ref(storage, `agreements/master_agreement_${Date.now()}.pdf`);
+            const snap = await uploadBytes(storageRef, file);
+            const url = await getDownloadURL(snap.ref);
+            setMasterAgreementUrl(url);
+            // Save to DB immediately
+            const token = localStorage.getItem('token');
+            await fetch(`${API_URL}/api/settings/admin/global`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ masterAgreementUrl: url })
+            });
+            setAgreementSaved(true);
+            setTimeout(() => setAgreementSaved(false), 3000);
+        } catch (err) {
+            alert(`Upload failed: ${err.message}`);
+        }
+        setAgreementUploading(false);
+    };
+
+    // ── PDF Download helpers (calls backend) ────────────────────────────────
+    const downloadInvoicePdf = (astrologerId, month) => {
+        const token = localStorage.getItem('token');
+        const url = `${API_URL}/api/finance/admin/invoice/${astrologerId}/${month}`;
+        // Open in new tab (browser will handle PDF download)
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `invoice_${astrologerId}_${month}.pdf`);
+        // Add auth via fetch + blob
+        fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
+            .then(r => r.blob())
+            .then(blob => {
+                const blobUrl = URL.createObjectURL(blob);
+                link.href = blobUrl;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(blobUrl);
+            })
+            .catch(err => alert('PDF generation failed: ' + err.message));
+    };
+
+    const downloadMonthlyReport = (month) => {
+        const token = localStorage.getItem('token');
+        const url = `${API_URL}/api/finance/admin/monthly-report/${month}`;
+        fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
+            .then(r => r.blob())
+            .then(blob => {
+                const blobUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = blobUrl;
+                a.download = `monthly_report_${month}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(blobUrl);
+            })
+            .catch(err => alert('Report generation failed: ' + err.message));
+    };
+
     const handleBookingAction = async (id, action, payload = {}) => {
         const token = localStorage.getItem('token');
         setBookingActionLoading(id);
@@ -1216,6 +1410,7 @@ const AdminDashboard = ({ user }) => {
             {[
                 { id: 'overview', icon: <BarChart2 size={19} />, label: 'System Overview' },
                 { id: 'approvals', icon: <Shield size={19} />, label: `Approvals${pendingAstros.length > 0 ? ` (${pendingAstros.length})` : ''}` },
+                { id: 'kyc', icon: <FileCheck size={19} />, label: `KYC Compliance${kycProfiles.filter(p => p.kycStatus === 'DOCS_SUBMITTED').length > 0 ? ` (${kycProfiles.filter(p => p.kycStatus === 'DOCS_SUBMITTED').length})` : ''}` },
                 { id: 'users', icon: <Users size={19} />, label: 'User Management' },
                 { id: 'browse', icon: <Search size={19} />, label: 'Experts View' },
                 { id: 'categories', icon: <Tag size={19} />, label: 'Category Builder' },
@@ -2158,6 +2353,174 @@ const AdminDashboard = ({ user }) => {
                 </div>
             )}
 
+            {/* ═══ KYC COMPLIANCE & BENEFICIARY GOVERNANCE ═══ */}
+            {tab === 'kyc' && (
+                <div className="fade-in">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+                        <div>
+                            <h2 className="dash-title" style={{ margin: 0 }}>Astrologer KYC & Beneficiary Governance</h2>
+                            <p className="dash-sub" style={{ margin: '0.3rem 0 0' }}>Verify PAN, Aadhaar, Signed Platform Agreement, and confirm beneficiary details in your native bank portal.</p>
+                        </div>
+                        <button className="btn btn-outline btn-sm" onClick={fetchKycProfiles} disabled={kycLoading}>
+                            <RefreshCw size={14} className={kycLoading ? 'spinning' : ''} style={{ marginRight: '0.4rem' }} /> Refresh KYC List
+                        </button>
+                    </div>
+
+                    <div className="glass-card" style={{ padding: 0, overflowX: 'auto' }}>
+                        <table className="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Astrologer</th>
+                                    <th>KYC Status</th>
+                                    <th>Submitted Documents</th>
+                                    <th>Bank / Payee Details</th>
+                                    <th>Bank Portal Sync</th>
+                                    <th style={{ textAlign: 'right' }}>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {kycProfiles.length === 0 ? (
+                                    <tr>
+                                        <td colSpan="6" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+                                            {kycLoading ? 'Loading KYC records...' : 'No astrologer KYC applications found.'}
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    kycProfiles.map(p => (
+                                        <tr key={p.id}>
+                                            <td>
+                                                <strong>{p.user?.firstName} {p.user?.lastName}</strong>
+                                                <br/>
+                                                <small style={{ color: 'var(--text-muted)' }}>{p.user?.email || p.user?.phone}</small>
+                                            </td>
+                                            <td>
+                                                <span className={`status-badge ${
+                                                    p.kycStatus === 'KYC_APPROVED' ? 'active' :
+                                                    p.kycStatus === 'KYC_REJECTED' ? 'cancelled' :
+                                                    p.kycStatus === 'DOCS_SUBMITTED' ? 'pending' : 'idle'
+                                                }`}>
+                                                    {p.kycStatus === 'DOCS_SUBMITTED' ? 'DOCS SUBMITTED' :
+                                                     p.kycStatus === 'KYC_APPROVED' ? 'APPROVED' :
+                                                     p.kycStatus === 'KYC_REJECTED' ? 'REJECTED' : 'NOT SUBMITTED'}
+                                                </span>
+                                                {p.kycRejectionReason && (
+                                                    <div style={{ fontSize: '0.72rem', color: 'var(--error)', marginTop: '0.25rem', maxWidth: '160px' }}>
+                                                        Reason: {p.kycRejectionReason}
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.78rem' }}>
+                                                    {p.signedAgreementUrl ? (
+                                                        <a href={p.signedAgreementUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#D4AF37', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                                                            <FileText size={12} /> Signed Agreement <ExternalLink size={10} />
+                                                        </a>
+                                                    ) : <span style={{ color: 'var(--text-muted)' }}>No Agreement</span>}
+
+                                                    {p.panCardUrl ? (
+                                                        <a href={p.panCardUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#64B5F6', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                                                            <FileCheck size={12} /> PAN Card <ExternalLink size={10} />
+                                                        </a>
+                                                    ) : <span style={{ color: 'var(--text-muted)' }}>No PAN</span>}
+
+                                                    {p.aadhaarUrl ? (
+                                                        <a href={p.aadhaarUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#81C784', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                                                            <FileCheck size={12} /> Aadhaar Card <ExternalLink size={10} />
+                                                        </a>
+                                                    ) : <span style={{ color: 'var(--text-muted)' }}>No Aadhaar</span>}
+                                                </div>
+                                            </td>
+                                            <td>
+                                                {p.bankAccountNo ? (
+                                                    <div style={{ fontSize: '0.8rem', lineHeight: '1.4' }}>
+                                                        <div><strong>{p.bankName || 'Bank'}</strong></div>
+                                                        <div style={{ color: 'var(--text-muted)', fontFamily: 'monospace' }}>A/C: {p.bankAccountNo}</div>
+                                                        <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>IFSC: {p.ifscCode} {p.bankBranchId ? `· ${p.bankBranchId}` : ''}</div>
+                                                    </div>
+                                                ) : (
+                                                    <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>No bank details</span>
+                                                )}
+                                            </td>
+                                            <td>
+                                                {p.bankDetailsConfirmedByAdmin ? (
+                                                    <span style={{ color: '#1cc88a', fontSize: '0.78rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                                                        <CheckCircle size={14} /> Added in Bank
+                                                    </span>
+                                                ) : (
+                                                    <button 
+                                                        className="btn btn-outline btn-xs" 
+                                                        style={{ fontSize: '0.72rem', borderColor: '#D4AF37', color: '#D4AF37' }}
+                                                        onClick={() => handleConfirmBeneficiary(p.id)}
+                                                    >
+                                                        + Mark Added in Bank
+                                                    </button>
+                                                )}
+                                            </td>
+                                            <td>
+                                                <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                                                    {p.kycStatus !== 'KYC_APPROVED' && (
+                                                        <button 
+                                                            className="btn btn-primary btn-xs" 
+                                                            onClick={() => handleKycApprove(p.id)}
+                                                            disabled={kycActionLoading === p.id}
+                                                            title="Approve KYC & Activate Profile"
+                                                        >
+                                                            <CheckCircle size={13} style={{ marginRight: '0.25rem' }} /> Approve
+                                                        </button>
+                                                    )}
+                                                    {p.kycStatus !== 'KYC_REJECTED' && (
+                                                        <button 
+                                                            className="btn btn-xs" 
+                                                            style={{ background: 'rgba(255,74,74,0.12)', color: 'var(--error)' }}
+                                                            onClick={() => { setKycRejectModal(p.id); setKycRejectReason(''); }}
+                                                            disabled={kycActionLoading === p.id}
+                                                            title="Reject KYC"
+                                                        >
+                                                            <XCircle size={13} style={{ marginRight: '0.25rem' }} /> Reject
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {/* KYC Rejection Modal */}
+            {kycRejectModal && (
+                <Modal isOpen={!!kycRejectModal} onClose={() => setKycRejectModal(null)} title="Reject KYC Application" width="460px">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                        <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-muted)' }}>
+                            Specify why this astrologer's KYC application is being rejected. This reason will be visible to the astrologer so they can re-upload corrected documents.
+                        </p>
+                        <FormField label="Rejection Reason (Minimum 10 characters)">
+                            <textarea 
+                                className="form-input form-textarea" 
+                                rows={3} 
+                                value={kycRejectReason} 
+                                onChange={e => setKycRejectReason(e.target.value)} 
+                                placeholder="e.g. Aadhaar image is blurry, or Bank account name does not match legal name..."
+                            />
+                        </FormField>
+                        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+                            <button className="btn btn-outline" onClick={() => setKycRejectModal(null)}>Cancel</button>
+                            <button 
+                                className="btn" 
+                                style={{ background: '#ff4a4a', color: '#fff' }}
+                                onClick={() => handleKycReject(kycRejectModal)}
+                                disabled={!kycRejectReason || kycRejectReason.trim().length < 10 || kycActionLoading === kycRejectModal}
+                            >
+                                Confirm Rejection
+                            </button>
+                        </div>
+                    </div>
+                </Modal>
+            )}
+
             {/* ═══ USERS ═══ */}
             {tab === 'users' && (
                 <div className="fade-in">
@@ -2431,14 +2794,14 @@ const AdminDashboard = ({ user }) => {
 
                             {/* Gateway Configuration */}
                             <div style={{ marginBottom: '1.25rem', padding: '1rem', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
-                                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
-                                    {['razorpay', 'easebuzz', 'paypal'].map(gw => (
+                                <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                                    {['razorpay', 'easebuzz', 'ccavenue', 'paypal'].map(gw => (
                                         <button 
                                             key={gw}
                                             onClick={() => setPgConfig(p => ({ ...p, activeGateway: gw }))}
-                                            style={{ flex: 1, padding: '0.4rem', fontSize: '0.7rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: pgConfig.activeGateway === gw ? 'rgba(212,175,55,0.15)' : 'transparent', color: pgConfig.activeGateway === gw ? 'var(--secondary-color)' : 'var(--text-muted)', fontWeight: 600, textTransform: 'capitalize', cursor: 'pointer' }}
+                                            style={{ flex: '1 1 20%', padding: '0.4rem', fontSize: '0.7rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: pgConfig.activeGateway === gw ? 'rgba(212,175,55,0.15)' : 'transparent', color: pgConfig.activeGateway === gw ? 'var(--secondary-color)' : 'var(--text-muted)', fontWeight: 600, textTransform: 'capitalize', cursor: 'pointer' }}
                                         >
-                                            {gw}
+                                            {gw === 'ccavenue' ? 'CCAvenue' : gw}
                                         </button>
                                     ))}
                                 </div>
@@ -2481,6 +2844,29 @@ const AdminDashboard = ({ user }) => {
                                             <input type="password" placeholder="Easebuzz Merchant Key" className="form-input-sm" value={settings.easebuzzKey || ''} onChange={e => setSettings({ ...settings, easebuzzKey: e.target.value })} />
                                             <input type="password" placeholder="Easebuzz Merchant Salt" className="form-input-sm" value={settings.easebuzzSalt || ''} onChange={e => setSettings({ ...settings, easebuzzSalt: e.target.value })} />
                                         </div>
+                                    ) : pgConfig.activeGateway === 'ccavenue' ? (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>CCAvenue (India Gateway)</span>
+                                                {settings.activeDomesticGateway === 'ccavenue' ? (
+                                                    <span style={{ fontSize: '0.7rem', color: '#1cc88a', fontWeight: 'bold' }}>🟢 Active (Domestic)</span>
+                                                ) : (
+                                                    <button className="btn btn-outline btn-xs" style={{ fontSize: '0.65rem', padding: '0.2rem 0.5rem' }} onClick={() => setSettings({ ...settings, activeDomesticGateway: 'ccavenue' })}>Activate Gateway</button>
+                                                )}
+                                            </div>
+                                            <input type="password" placeholder="CCAvenue Merchant ID" className="form-input-sm" value={ccavenueConfig.merchantId || ''} onChange={e => setCcavenueConfig({ ...ccavenueConfig, merchantId: e.target.value })} />
+                                            <input type="password" placeholder="CCAvenue Access Code" className="form-input-sm" value={ccavenueConfig.accessCode || ''} onChange={e => setCcavenueConfig({ ...ccavenueConfig, accessCode: e.target.value })} />
+                                            <input type="password" placeholder="CCAvenue Working Key (Encryption)" className="form-input-sm" value={ccavenueConfig.workingKey || ''} onChange={e => setCcavenueConfig({ ...ccavenueConfig, workingKey: e.target.value })} />
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.25rem' }}>
+                                                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Mode:</span>
+                                                <button 
+                                                    onClick={() => setCcavenueConfig({ ...ccavenueConfig, mode: ccavenueConfig.mode === 'live' ? 'test' : 'live' })}
+                                                    style={{ padding: '0.25rem 0.6rem', borderRadius: '6px', fontSize: '0.68rem', border: '1px solid var(--glass-border)', background: ccavenueConfig.mode === 'live' ? 'rgba(28,200,138,0.2)' : 'rgba(212,175,55,0.2)', color: ccavenueConfig.mode === 'live' ? '#1cc88a' : '#D4AF37', cursor: 'pointer', fontWeight: 700 }}
+                                                >
+                                                    {ccavenueConfig.mode === 'live' ? '⚡ LIVE' : '🧪 TEST'}
+                                                </button>
+                                            </div>
+                                        </div>
                                     ) : (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
@@ -2492,6 +2878,46 @@ const AdminDashboard = ({ user }) => {
                                         </div>
                                     )}
                                 </div>
+                            </div>
+
+                            {/* Platform Master Agreement Upload */}
+                            <div style={{ marginBottom: '1.25rem', padding: '1rem', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+                                <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.8rem', color: 'var(--secondary-color)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                    <FileText size={14} /> Astrologer Agreement Template (PDF)
+                                </h4>
+                                <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
+                                    Upload the official platform agreement. New astrologers will download, sign, and re-upload this document during onboarding.
+                                </p>
+                                
+                                {masterAgreementUrl && (
+                                    <div style={{ marginBottom: '0.75rem', padding: '0.5rem 0.75rem', background: 'rgba(212,175,55,0.08)', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <a href={masterAgreementUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#D4AF37', fontSize: '0.75rem', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                            <FileText size={13} /> View Current Template <ExternalLink size={11} />
+                                        </a>
+                                        <span style={{ color: '#1cc88a', fontSize: '0.7rem', fontWeight: 600 }}>Active</span>
+                                    </div>
+                                )}
+
+                                <input 
+                                    ref={agreementFileRef}
+                                    type="file" 
+                                    accept="application/pdf" 
+                                    style={{ display: 'none' }}
+                                    onChange={e => handleAgreementUpload(e.target.files[0])}
+                                />
+                                <button 
+                                    className="btn btn-outline btn-xs btn-block"
+                                    onClick={() => agreementFileRef.current.click()}
+                                    disabled={agreementUploading}
+                                >
+                                    <Upload size={12} style={{ marginRight: '0.3rem' }} />
+                                    {agreementUploading ? 'Uploading PDF...' : masterAgreementUrl ? 'Replace Agreement PDF' : 'Upload Agreement PDF'}
+                                </button>
+                                {agreementSaved && (
+                                    <div style={{ color: '#1cc88a', fontSize: '0.72rem', textAlign: 'center', marginTop: '0.4rem' }}>
+                                        ✓ Agreement template saved and live.
+                                    </div>
+                                )}
                             </div>
 
                             {/* Superadmin Escrow Bank Account Details */}
@@ -2811,7 +3237,7 @@ const AdminDashboard = ({ user }) => {
                             <h2 className="dash-title" style={{ margin: 0 }}>Monthly Payouts Manager</h2>
                             <p className="dash-sub">Process monthly astrologer gross releases, compute TDS withholding (10%), and settle balances.</p>
                         </div>
-                        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
                             <input 
                                 type="month" 
                                 className="form-input-sm" 
@@ -2819,6 +3245,13 @@ const AdminDashboard = ({ user }) => {
                                 value={payoutMonth}
                                 onChange={e => setPayoutMonth(e.target.value)}
                             />
+                            <button 
+                                className="btn btn-outline"
+                                onClick={() => downloadMonthlyReport(payoutMonth)}
+                                title="Download platform monthly accounting report as PDF"
+                            >
+                                <Download size={15} style={{ marginRight: '0.4rem' }} /> Export P&L (PDF)
+                            </button>
                             <button 
                                 className="btn btn-primary"
                                 onClick={async () => {
@@ -2892,22 +3325,32 @@ const AdminDashboard = ({ user }) => {
                                                 {pay.referenceId || pay.adminNotes || '-'}
                                             </td>
                                             <td>
-                                                {pay.status === 'PENDING' ? (
-                                                    <button 
-                                                        className="btn btn-outline btn-sm"
-                                                        style={{ borderColor: '#1cc88a', color: '#1cc88a', padding: '0.4rem 0.6rem', fontSize: '0.8rem' }}
-                                                        onClick={() => {
-                                                            setPayoutToMark(pay);
-                                                            setPayoutRefId('');
-                                                            setPayoutNotes('');
-                                                            setPayoutModalOpen(true);
-                                                        }}
+                                                <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                                                    <button
+                                                        className="btn btn-outline btn-xs"
+                                                        style={{ padding: '0.35rem 0.5rem', fontSize: '0.75rem', borderColor: '#D4AF37', color: '#D4AF37' }}
+                                                        onClick={() => downloadInvoicePdf(pay.astrologerId, pay.month)}
+                                                        title="Download Astrologer Payout Invoice PDF"
                                                     >
-                                                        Mark Paid
+                                                        <Download size={12} style={{ marginRight: '0.25rem' }} /> Invoice PDF
                                                     </button>
-                                                ) : (
-                                                    <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>✓ Settled</span>
-                                                )}
+                                                    {pay.status === 'PENDING' ? (
+                                                        <button 
+                                                            className="btn btn-outline btn-xs"
+                                                            style={{ borderColor: '#1cc88a', color: '#1cc88a', padding: '0.35rem 0.5rem', fontSize: '0.75rem' }}
+                                                            onClick={() => {
+                                                                setPayoutToMark(pay);
+                                                                setPayoutRefId('');
+                                                                setPayoutNotes('');
+                                                                setPayoutModalOpen(true);
+                                                            }}
+                                                        >
+                                                            Mark Paid
+                                                        </button>
+                                                    ) : (
+                                                        <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>✓ Settled</span>
+                                                    )}
+                                                </div>
                                             </td>
                                         </tr>
                                     ))

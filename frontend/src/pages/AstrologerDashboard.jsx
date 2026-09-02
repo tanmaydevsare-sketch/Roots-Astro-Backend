@@ -197,6 +197,9 @@ const AstrologerDashboard = ({ user, onUserUpdate }) => {
         currentMonth: { grossAmount: 0, tdsRate: 0.10, tdsAmount: 0, netAmount: 0, bookingCount: 0, status: 'PENDING' }
     });
 
+    // ── KYC Status ─────────────────────────────────────────────
+    const [kycStatus, setKycStatus] = useState(null); // null = not fetched yet
+
     // API Integration useEffect
     useEffect(() => {
         const fetchDashboardData = async () => {
@@ -338,6 +341,22 @@ const AstrologerDashboard = ({ user, onUserUpdate }) => {
         fetchDashboardData();
         fetchMasterServices();
         fetchProfile();
+
+        // Fetch KYC status
+        const fetchKyc = async () => {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+            try {
+                const res = await fetch(`${API_URL}/api/astrologers/kyc/status`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    setKycStatus(data.kycStatus || 'PENDING');
+                }
+            } catch { /* ignore */ }
+        };
+        fetchKyc();
     }, [refreshTrigger]);
 
     const handleImageUpload = (e) => {
@@ -645,6 +664,47 @@ const AstrologerDashboard = ({ user, onUserUpdate }) => {
                 </div>
             )}
 
+            {/* ── KYC Status Banner ── */}
+            {kycStatus && kycStatus !== 'KYC_APPROVED' && (
+                <div style={{
+                    margin: '0 0 1.5rem 0',
+                    padding: '1rem 1.5rem',
+                    borderRadius: '14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '1rem',
+                    background: kycStatus === 'KYC_REJECTED' ? 'rgba(255,74,74,0.08)' :
+                                kycStatus === 'DOCS_SUBMITTED' ? 'rgba(255,193,7,0.08)' :
+                                'rgba(212,175,55,0.08)',
+                    border: `1px solid ${kycStatus === 'KYC_REJECTED' ? 'rgba(255,74,74,0.3)' :
+                                         kycStatus === 'DOCS_SUBMITTED' ? 'rgba(255,193,7,0.3)' :
+                                         'rgba(212,175,55,0.3)'}`
+                }}>
+                    <div style={{ fontSize: '1.5rem' }}>
+                        {kycStatus === 'KYC_REJECTED' ? '❌' : kycStatus === 'DOCS_SUBMITTED' ? '⏳' : '⚠️'}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                        <p style={{ margin: 0, fontWeight: 700, fontSize: '0.9rem',
+                            color: kycStatus === 'KYC_REJECTED' ? '#ff4a4a' :
+                                   kycStatus === 'DOCS_SUBMITTED' ? '#ffc107' : '#D4AF37' }}>
+                            {kycStatus === 'KYC_REJECTED' ? 'KYC Rejected — Action Required' :
+                             kycStatus === 'DOCS_SUBMITTED' ? 'KYC Under Review' :
+                             'KYC Verification Required'}
+                        </p>
+                        <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)' }}>
+                            {kycStatus === 'KYC_REJECTED' ? 'Your KYC was rejected. Please re-submit your documents via the application form.' :
+                             kycStatus === 'DOCS_SUBMITTED' ? 'Your documents are being reviewed by the Roots Astro team. This typically takes 2–3 business days.' :
+                             'Please complete your KYC verification to activate payouts and full platform access.'}
+                        </p>
+                    </div>
+                    {kycStatus !== 'DOCS_SUBMITTED' && (
+                        <a href="/apply/astrologer" style={{ background: 'rgba(212,175,55,0.15)', color: '#D4AF37', padding: '0.5rem 1rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                            Complete KYC →
+                        </a>
+                    )}
+                </div>
+            )}
+
             <div style={{ filter: isUnderReview ? 'blur(4px) grayscale(80%) opacity(0.3)' : 'none', pointerEvents: isUnderReview ? 'none' : 'auto', userSelect: isUnderReview ? 'none' : 'auto', transition: 'all 0.4s ease', height: '100%', width: '100%' }}>
             {/* ── Service Modal ── */}
             <Modal isOpen={serviceModal} onClose={() => setServiceModal(false)} title="Add New Service" width="460px">
@@ -658,6 +718,7 @@ const AstrologerDashboard = ({ user, onUserUpdate }) => {
                             {masterServices.map(ms => (
                                 <option key={ms.id} value={ms.id}>{ms.name} ({ms.category?.name})</option>
                             ))}
+
                         </select>
                     </FormField>
                     {newServiceForm.masterServiceId && (

@@ -53,6 +53,23 @@ model AstrologerProfile {
   upiId         String?
   certification String?
 
+  // ── KYC Documents ───────────────────────────────────────────
+  panCardUrl         String?   // Firebase Storage URL
+  aadhaarUrl         String?   // Firebase Storage URL
+  signedAgreementUrl String?   // Signed agreement uploaded by astrologer
+
+  // ── Bank / Payee Details ─────────────────────────────────────
+  bankAccountNo      String?
+  bankName           String?
+  bankBranchId       String?
+  ifscCode           String?
+  bankDetailsConfirmedByAdmin Boolean @default(false)  // Admin ticks after updating in their bank portal
+
+  // ── KYC Status ───────────────────────────────────────────────
+  kycStatus          String    @default("PENDING") // PENDING | DOCS_SUBMITTED | KYC_APPROVED | KYC_REJECTED
+  kycRejectionReason String?
+  kycReviewedAt      DateTime?
+
   // Payment Gateway Connection Status
   razorpayId        String?
   razorpayConnected Boolean  @default(false)
@@ -284,9 +301,18 @@ model GlobalSettings {
   cancellationCutoffMinutes  Int     @default(30)    // Minutes before appt after which no refund
 
   // ── Gateway Selection ─────────────────────────────────────
-  activeDomesticGateway String @default("razorpay") // razorpay | easebuzz
+  activeDomesticGateway String @default("razorpay") // razorpay | easebuzz | ccavenue
   easebuzzKey           String?
   easebuzzSalt          String?
+
+  // ── CCAvenue ──────────────────────────────────────────────
+  ccavenueMerchantId   String?
+  ccavenueAccessCode   String?
+  ccavenueWorkingKey   String?
+  ccavenueMode         String?  @default("test") // test | live
+
+  // ── Master Agreement (Admin uploads PDF template) ─────────
+  masterAgreementUrl   String?
 
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt

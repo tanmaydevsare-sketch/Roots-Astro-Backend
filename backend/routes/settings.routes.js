@@ -103,7 +103,11 @@ router.patch('/admin/global', authMiddleware, roleMiddleware(['SUPERADMIN', 'ADM
             'siteSecondaryColor', 'siteAccentColor', 'siteLogo', 'convenienceRate', 'gstRate',
             // ── Payment System Settings ──────────────────────────────────────────
             'tdsRate', 'disputeWindowDays', 'cancellationCutoffMinutes',
-            'activeDomesticGateway', 'easebuzzKey', 'easebuzzSalt'
+            'activeDomesticGateway', 'easebuzzKey', 'easebuzzSalt',
+            // ── CCAvenue ─────────────────────────────────────────────────────────
+            'ccavenueMerchantId', 'ccavenueAccessCode', 'ccavenueWorkingKey', 'ccavenueMode',
+            // ── Platform Documents ───────────────────────────────────────────────
+            'masterAgreementUrl'
         ];
 
         // Add super-only fields if user is SUPERADMIN
@@ -283,6 +287,19 @@ router.delete('/admin/services/:id', authMiddleware, roleMiddleware(['ADMIN']), 
     try {
         await prisma.masterService.delete({ where: { id: parseInt(req.params.id) } });
         res.json({ message: 'Service deleted' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ─── PUBLIC: Get master agreement URL (for astrologers to download) ──────
+router.get('/public/agreement', async (req, res) => {
+    try {
+        const settings = await prisma.globalSettings.findUnique({ where: { id: 1 } });
+        if (!settings?.masterAgreementUrl) {
+            return res.status(404).json({ error: 'No agreement template has been uploaded yet. Please contact support.' });
+        }
+        res.json({ url: settings.masterAgreementUrl });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }

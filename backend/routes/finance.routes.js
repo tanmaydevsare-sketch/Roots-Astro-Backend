@@ -4,6 +4,8 @@ const prisma = require("../config/prisma");
 const crypto = require("crypto");
 const { authMiddleware, roleMiddleware } = require("../middleware/auth");
 const { getEasebuzzCreds, computeInitiateHash, verifyResponseHash, getEasebuzzBaseUrl } = require("../config/easebuzz");
+const { encrypt, decrypt, getCCAvenueCreds, getCCAvenueBaseUrl } = require("../config/ccavenue");
+const PDFDocument = require("pdfkit");
 
 // ─── SHARED WALLET STATS ───────────────────────────────────────────────────
 router.get("/stats", authMiddleware, async (req, res) => {
@@ -550,6 +552,289 @@ router.get("/astrologer/earnings", authMiddleware, roleMiddleware(["ASTROLOGER"]
             }
         });
     } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+
+// ─── CCAVENUE: Initiate Payment ────────────────────────────────────────────
+router.post("/ccavenue/initiate", authMiddleware, async (req, res) => {
+    const { amount, purpose } = req.body;
+    try {
+        if (!amount || parseFloat(amount) <= 0) return res.status(400).json({ error: "Invalid amount" });
+        const settings = await prisma.globalSettings.findUnique({ where: { id: 1 } });
+        const { merchantId, accessCode, workingKey, mode } = getCCAvenueCreds(settings);
+
+        if (!merchantId || !accessCode || !workingKey) {
+            return res.status(503).json({ error: "CCAvenue is not configured. Please add merchant credentials in Admin > Platform Finance." });
+        }
+
+        const orderId = `RA-${Date.now()}-${req.user.id}`;
+        const backendUrl = process.env.BACKEND_URL || "https://roots-astro-backend.onrender.com";
+        const frontendUrl = process.env.FRONTEND_URL || "https://roots-astro.web.app";
+
+        const params = [
+            `merchant_id=${merchantId}`,
+            `order_id=${orderId}`,
+            `amount=${parseFloat(amount).toFixed(2)}`,
+            `currency=INR`,
+            `redirect_url=${backendUrl}/api/finance/ccavenue/callback`,
+            `cancel_url=${frontendUrl}/client/dashboard?paymentStatus=cancelled`,
+            `language=EN`,
+            `billing_name=${req.user.firstName || "Customer"} ${req.user.lastName || ""}`,
+            `billing_email=${req.user.email || ""}`,
+            `billing_tel=${req.user.phone || ""}`,
+            `merchant_param1=${req.user.id}`,
+            `merchant_param2=${purpose || "wallet_topup"}`
+        ].join("&");
+
+        const encRequest = encrypt(params, workingKey);
+        const paymentUrl = getCCAvenueBaseUrl(mode);
+
+        res.json({ encRequest, accessCode, paymentUrl, orderId });
+    } catch (error) {
+        console.error("[CCAVENUE_INITIATE]", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ─── CCAVENUE: Payment Callback (server-to-server) ────────────────────────
+router.post("/ccavenue/callback", async (req, res) => {
+    try {
+        const { encResp } = req.body;
+        if (!encResp) return res.status(400).send("Missing encResp");
+
+        const settings = await prisma.globalSettings.findUnique({ where: { id: 1 } });
+        const { workingKey } = getCCAvenueCreds(settings);
+        const frontendUrl = process.env.FRONTEND_URL || "https://roots-astro.web.app";
+
+        const decrypted = decrypt(encResp, workingKey);
+        const params = Object.fromEntries(new URLSearchParams(decrypted));
+
+        const { order_status, amount, order_id, tracking_id, merchant_param1: userId } = params;
+
+        if (order_status === "Success" && userId) {
+            const parsedUserId = parseInt(userId);
+            const parsedAmount = parseFloat(amount);
+
+            let wallet = await prisma.wallet.findUnique({ where: { userId: parsedUserId } });
+            if (!wallet) wallet = await prisma.wallet.create({ data: { userId: parsedUserId, balance: 0 } });
+
+            await prisma.$transaction([
+                prisma.wallet.update({
+                    where: { id: wallet.id },
+                    data: { balance: { increment: parsedAmount } }
+                }),
+                prisma.transaction.create({
+                    data: {
+                        walletId: wallet.id,
+                        amount: parsedAmount,
+                        type: "CREDIT",
+                        category: "TOPUP",
+                        status: "COMPLETED",
+                        description: `CCAvenue payment - Order ${order_id}`,
+                        reference: tracking_id || order_id
+                    }
+                })
+            ]);
+
+            return res.redirect(`${frontendUrl}/client/dashboard?paymentStatus=success&amount=${parsedAmount}`);
+        }
+
+        res.redirect(`${frontendUrl}/client/dashboard?paymentStatus=failed`);
+    } catch (error) {
+        console.error("[CCAVENUE_CALLBACK]", error);
+        res.redirect(`${process.env.FRONTEND_URL || "https://roots-astro.web.app"}/client/dashboard?paymentStatus=error`);
+    }
+});
+
+// ─── PDF: Astrologer Payout Invoice ───────────────────────────────────────
+router.get("/admin/invoice/:astrologerId/:month", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+    const { astrologerId, month } = req.params;
+    try {
+        const settings = await prisma.globalSettings.findUnique({ where: { id: 1 } }) || {};
+        const astrologer = await prisma.user.findUnique({
+            where: { id: parseInt(astrologerId) },
+            include: { astrologerProfile: true }
+        });
+        if (!astrologer) return res.status(404).json({ error: "Astrologer not found" });
+
+        // Get all released bookings in the month
+        const [year, mon] = month.split("-").map(Number);
+        const startDate = new Date(year, mon - 1, 1);
+        const cutoffDate = new Date(year, mon - 1, 25, 23, 59, 59); // earnings up to 25th
+        const bookings = await prisma.booking.findMany({
+            where: {
+                astrologerId: parseInt(astrologerId),
+                paymentStatus: { in: ["RELEASED", "HELD"] },
+                scheduledAt: { gte: startDate, lte: cutoffDate }
+            }
+        });
+
+        const commissionRate = settings.commissionRate ?? 0.20;
+        const tdsRate = settings.tdsRate ?? 0.10;
+        const baseTotal = bookings.reduce((s, b) => s + (b.baseAmount || 0), 0);
+        const commission = baseTotal * commissionRate;
+        const gross = baseTotal - commission;
+        const tds = gross * tdsRate;
+        const net = gross - tds;
+
+        const doc = new PDFDocument({ margin: 50 });
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", `attachment; filename=invoice_${astrologerId}_${month}.pdf`);
+        doc.pipe(res);
+
+        // Header
+        doc.fontSize(22).fillColor("#2D1E4D").text("ROOTS ASTRO", { align: "center" });
+        doc.fontSize(12).fillColor("#555").text("Astrologer Payout Invoice", { align: "center" });
+        doc.moveDown();
+        doc.moveTo(50, doc.y).lineTo(550, doc.y).stroke("#D4AF37");
+        doc.moveDown();
+
+        // Invoice details
+        doc.fontSize(11).fillColor("#000");
+        doc.text(`Invoice For: ${astrologer.firstName} ${astrologer.lastName}`);
+        doc.text(`Email: ${astrologer.email}`);
+        doc.text(`Month: ${month}`);
+        doc.text(`Generated: ${new Date().toLocaleDateString("en-IN")}`);
+        doc.moveDown();
+
+        doc.moveTo(50, doc.y).lineTo(550, doc.y).stroke("#ccc");
+        doc.moveDown();
+
+        // Breakdown table
+        const addRow = (label, value, bold = false) => {
+            doc.fontSize(bold ? 12 : 11)
+               .fillColor(bold ? "#2D1E4D" : "#333")
+               .text(label, 50, doc.y, { continued: true, width: 300 })
+               .fillColor(bold ? "#D4AF37" : "#000")
+               .text(`₹ ${value.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`, { align: "right" });
+        };
+
+        addRow("Total Session Base Amount", baseTotal);
+        addRow(`Platform Commission (${(commissionRate * 100).toFixed(0)}%)`, commission);
+        addRow("Astrologer Gross Earnings", gross);
+        addRow(`TDS Withheld (${(tdsRate * 100).toFixed(0)}% of Gross)`, tds);
+        doc.moveDown(0.5);
+        doc.moveTo(50, doc.y).lineTo(550, doc.y).stroke("#D4AF37");
+        doc.moveDown(0.5);
+        addRow("NET PAYOUT TO ASTROLOGER", net, true);
+        doc.moveDown();
+
+        // Payout schedule note
+        doc.fontSize(9).fillColor("#777")
+           .text("Note: Payment will be transferred between the 25th–31st of the month from the platform bank account. TDS certificate will be issued at year end.", { align: "center" });
+
+        doc.end();
+    } catch (error) {
+        console.error("[INVOICE_PDF]", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ─── PDF: Monthly Platform Profit Report ──────────────────────────────────
+router.get("/admin/monthly-report/:month", authMiddleware, roleMiddleware(["ADMIN"]), async (req, res) => {
+    const { month } = req.params;
+    try {
+        const settings = await prisma.globalSettings.findUnique({ where: { id: 1 } }) || {};
+        const [year, mon] = month.split("-").map(Number);
+        const startDate = new Date(year, mon - 1, 1);
+        const endDate = new Date(year, mon, 0, 23, 59, 59);
+
+        const bookings = await prisma.booking.findMany({
+            where: {
+                scheduledAt: { gte: startDate, lte: endDate },
+                paymentStatus: { in: ["HELD", "RELEASED"] }
+            },
+            include: {
+                astrologer: { select: { firstName: true, lastName: true } },
+                client: { select: { firstName: true, lastName: true } }
+            }
+        });
+
+        const commissionRate = settings.commissionRate ?? 0.20;
+        const tdsRate = settings.tdsRate ?? 0.10;
+        const totalVolume = bookings.reduce((s, b) => s + (b.totalPaidAmount || 0), 0);
+        const totalBase = bookings.reduce((s, b) => s + (b.baseAmount || 0), 0);
+        const totalGst = bookings.reduce((s, b) => s + (b.gstAmount || 0), 0);
+        const totalConv = bookings.reduce((s, b) => s + (b.convenienceAmount || 0), 0);
+        const totalPlatformProfit = (totalBase * commissionRate) + totalConv;
+        const totalAstroGross = totalBase * (1 - commissionRate);
+        const totalTds = totalAstroGross * tdsRate;
+        const totalNetPayout = totalAstroGross - totalTds;
+
+        const doc = new PDFDocument({ margin: 50, size: "A4" });
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", `attachment; filename=monthly_report_${month}.pdf`);
+        doc.pipe(res);
+
+        // Header
+        doc.fontSize(22).fillColor("#2D1E4D").text("ROOTS ASTRO", { align: "center" });
+        doc.fontSize(13).fillColor("#555").text(`Monthly Platform Report — ${month}`, { align: "center" });
+        doc.fontSize(10).fillColor("#999").text(`Generated on ${new Date().toLocaleDateString("en-IN")} at ${new Date().toLocaleTimeString("en-IN")}`, { align: "center" });
+        doc.moveDown();
+        doc.moveTo(50, doc.y).lineTo(545, doc.y).lineWidth(2).stroke("#D4AF37");
+        doc.moveDown();
+
+        // Summary
+        doc.fontSize(13).fillColor("#2D1E4D").text("Financial Summary", { underline: true });
+        doc.moveDown(0.5);
+        const sum = (label, val, color = "#000") =>
+            doc.fontSize(11).fillColor("#444").text(label, 50, doc.y, { continued: true, width: 320 })
+               .fillColor(color).text(`₹ ${val.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`, { align: "right" });
+
+        sum("Total Customer Payments (incl. GST)", totalVolume);
+        sum("GST Collected (18%)", totalGst, "#E91E63");
+        sum("Total Base Service Revenue", totalBase);
+        sum(`Platform Commission (${(commissionRate * 100).toFixed(0)}%)`, totalBase * commissionRate, "#4CAF50");
+        sum("Convenience Fees Collected", totalConv, "#4CAF50");
+        doc.moveDown(0.3);
+        doc.moveTo(50, doc.y).lineTo(545, doc.y).lineWidth(1).stroke("#D4AF37");
+        doc.moveDown(0.3);
+        doc.fontSize(13).fillColor("#2D1E4D").text("PLATFORM NET PROFIT", 50, doc.y, { continued: true, width: 320 })
+           .fillColor("#D4AF37").text(`₹ ${totalPlatformProfit.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`, { align: "right" });
+        doc.moveDown();
+        sum(`Total TDS Withheld (${(tdsRate * 100).toFixed(0)}%)`, totalTds, "#FF5722");
+        sum("Total Net Astrologer Payouts Due", totalNetPayout, "#2196F3");
+
+        doc.moveDown();
+        doc.moveTo(50, doc.y).lineTo(545, doc.y).lineWidth(1).stroke("#ccc");
+        doc.moveDown();
+
+        // Transaction table
+        doc.fontSize(13).fillColor("#2D1E4D").text(`Booking Ledger (${bookings.length} transactions)`, { underline: true });
+        doc.moveDown(0.5);
+
+        // Table header
+        const cols = [50, 140, 230, 320, 400, 480];
+        doc.fontSize(9).fillColor("#fff")
+           .rect(50, doc.y, 495, 16).fill("#2D1E4D");
+        const rowY = doc.y - 14;
+        doc.fillColor("#fff")
+           .text("#", cols[0], rowY, { width: 80 })
+           .text("Client", cols[1], rowY, { width: 90 })
+           .text("Astrologer", cols[2], rowY, { width: 90 })
+           .text("Base (₹)", cols[3], rowY, { width: 75 })
+           .text("GST (₹)", cols[4], rowY, { width: 75 })
+           .text("Total (₹)", cols[5], rowY, { width: 75 });
+        doc.moveDown();
+
+        bookings.slice(0, 50).forEach((b, i) => {
+            const y = doc.y;
+            if (i % 2 === 0) doc.rect(50, y - 2, 495, 14).fill("#f9f6ff");
+            doc.fillColor("#333")
+               .text(String(b.id), cols[0], y, { width: 80 })
+               .text(`${b.client.firstName}`, cols[1], y, { width: 90 })
+               .text(`${b.astrologer.firstName}`, cols[2], y, { width: 90 })
+               .text(`${(b.baseAmount || 0).toFixed(0)}`, cols[3], y, { width: 75 })
+               .text(`${(b.gstAmount || 0).toFixed(0)}`, cols[4], y, { width: 75 })
+               .text(`${(b.totalPaidAmount || 0).toFixed(0)}`, cols[5], y, { width: 75 });
+            doc.moveDown(0.8);
+        });
+
+        doc.end();
+    } catch (error) {
+        console.error("[MONTHLY_REPORT_PDF]", error);
+        res.status(500).json({ error: error.message });
+    }
 });
 
 module.exports = router;
